@@ -1,16 +1,15 @@
-{$R+}{$Q+}
+{$R-}{$Q-}
 program project1;
 
 uses
-{  Classes, FileUtil, Forms, Controls, Graphics, Dialogs, ExtCtrls,
-  StdCtrls, CastleControl,
-  CastleCreatures,
-  CastleKeysMouse,}
   SysUtils,
   castle_base, castle_window, CastleWindow,
   castlescene, castlescenecore, castlescenemanager,
   castle3d, castlevectors,  X3DNodes, x3dload,
-  castleplayer, castlecameras;
+  castleplayer, castlecameras,
+  CastleControls{for TCastleLAbel},
+  CastleImages;
+  ///, CastleFreeType, CastleFonts, CastleUnicode, CastleStringUtils,
 
 const MaxTilesTypes = 51;
 
@@ -24,6 +23,8 @@ const maxmaxx=15;
       show_map_boolean=false;
 
       Target_Map_Area=maxmaxx*maxmaxy*maxmaxz div 2;
+
+const models_folder='DAT'+pathdelim+'models'+pathdelim;
 
 // constants for tiles and faces
 
@@ -44,30 +45,37 @@ const floor_na = 0;
 const floor_wall = 1;
       floor_free = 2;
 
-// this is a single 1x1 tile
-const maxangles = 3; {for rectagonal grid //0..5 for hexagonal}
+// 1x1x1 tile type (subtype) declaration
+const maxangles = 3; {0..3 for rectagonal grid //0..5 for hexagonal}
       angle_top = 1;
       angle_bottom = 3;
       angle_left = 2;
       angle_right = 0;
       angle_stairs_up = 1;   //for floor
       angle_stairs_down = 2;
+
 type Basic_Tile_type = record
   base:byte; //this tile basic state
   faces:array[0..maxangles] of byte; //each tile face state //redundant 2x
   floor:array[1..2] of byte; // at this moment each tile has top and bottom only
 end;
 
-const maxtilesize = 3; {1x1 tiles, todo}
-      maxtilesizez = 2; {1 is one floor only as all ladders are 2}
+const maxtilesize = 3;   {max tile size (square tiles)}
+      maxtilesizez = 2;   {max tile height}
 type Map_Tile_type = record
-  Tile3D:TX3DRootNode;
+//  Tile3D: TX3DRootNode;
   Tile_scene: TCastleScene;
+  Tile_PNG: array[1..maxtilesizez] of TCastleImage;
   TileFreeFaces:byte;
   tilesizex,tilesizey,tilesizez:byte;
-  Has_Stairs_down:boolean;    // Tile has stairs down (to meet the algorithm)
-  blocker:boolean;            // Tile is a generig face blocker.
+  Has_Stairs_down:boolean;    // Tile has stairs down (to meet the generation algorithm, requiring sometimes ladders to go down)
+  blocker:boolean;            // Tile is a generic face blocker.
   TileMap:array[1..maxtilesize,1..maxtilesize,1..maxtilesizez] of Basic_Tile_Type;
+end;
+
+type Generator_type = record
+  tile_type:integer;
+  tx,ty,tz:integer;
 end;
 
 var
@@ -75,36 +83,32 @@ var
 
   Tiles: array[1..MaxTilesTypes] of Map_Tile_Type;
   Map: array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of Basic_Tile_Type;
+  GeneratorSteps: array[1..maxMapTiles] of Generator_type;
   MapTiles: array[1..maxMapTiles] of T3DTransform;
 
   DistanceMap,olddistancemap:array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of integer;
-  vis,chngd: array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of boolean;
-  drawall:boolean;
-  px,py,pz,oldx,oldy,oldz: integer;
-  lasttimer:TDateTime;
-  MapArea,deepest_level,max_distance:integer;
+  vis: array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of boolean;
+  px,py,pz,oldz: integer;
+  MapArea,explored_area,deepest_level,max_distance:integer;
 
-  RoseR:TX3DRootNode;
   RoseS:TCastleScene;
-  RoseT:T3DTransform;
-  RoseTransform: TTransformNode;
+  RoseT:T3DTRansform;
 
   Rosex,Rosey,Rosez:integer;
   RoseFound:boolean;
 
-{  lightR:TX3DRootNode;
-  LightS:TCastleScene;
-  LightT:T3DTransform;}
   n_tiles:integer;
   maxx,maxy,maxz:byte;
 
   Player:TPlayer;
 
-  WalkCamera:TWalkCamera;
+  Label_FPS,explored_label:TCastleLabel;
+  RoseLabel:TCastleLabel;
 
-{  RenderParams: TBasicRenderParams;
-  LightNode: TPointLightNode;
-  LightInstance: TLightInstance;}
+  Minimap:array[1..maxmaxz] of TCastleImage;
+  zero_png:TCastleImage;
+  Map_img,Player_Img:TCastleImageControl;
+
 
 {==========================================================================}
 {============================ PROCEDURES ==================================}
@@ -116,7 +120,7 @@ var i,j:integer;
     FreeFaces:byte;
     face_type:byte;
 begin
- //clear all tiles data
+ //reset 1-15 tiles data
   for i:=1 to 15 do with Tiles[i] do begin
     tilesizex:=1;
     tilesizey:=1;
@@ -182,7 +186,7 @@ begin
   tiles[15].TileMap[1,1,1].faces[angle_bottom]:=face_free+face_type;
   tiles[15].TileMap[1,1,1].faces[angle_right]:=face_free+face_type;
 
-  //STAIRCASEs 1x3
+  //STAIRCASEs 1x3x2
   with Tiles[16] do begin
     tilesizex:=1;
     tilesizey:=3;
@@ -767,27 +771,40 @@ face_type:=1;
   end;
 
 
-  // now prepare 3D part;
+  // now prepare 3D part + tile map view
   for i:=1 to maxTilesTypes do begin
-    Tiles[i].Tile3D:=load3d('DAT'+pathdelim+'models'+pathdelim+inttostr(i)+'.x3d'); //load tile x3d
     Tiles[i].Tile_scene:= TCastleScene.create(Window.sceneManager);
     Tiles[i].Tile_scene.spatial := [ssRendering, ssDynamicCollisions];
     Tiles[i].Tile_scene.processevents:=true;
-    Tiles[i].Tile_scene.load(Tiles[i].Tile3D,true);
+    Tiles[i].Tile_scene.load(models_folder+inttostr(i)+'.x3d');
+//    Tiles[i].Tile3D:=Load3D(models_folder+inttostr(i)+'.x3d');
+
+    //load png tile for the mini-map
+    if Tiles[i].tilesizez=1 then
+      try
+        Tiles[i].Tile_PNG[1]:=LoadImage(models_folder+inttostr(i)+'.png')
+      except
+        Tiles[i].Tile_PNG[1]:=nil
+      end
+    else
+    for j:=1 to Tiles[i].tilesizez do
+          try
+            Tiles[i].Tile_PNG[j]:=LoadImage(models_folder+inttostr(i)+'_'+inttostr(j)+'.png');
+            tiles[i].Tile_PNG[j]:=(tiles[i].Tile_PNG[j] as TRGBImage).ToRGBAlphaImage;
+            (Tiles[i].Tile_PNG[j] as TRGBAlphaImage).clearAlpha(255);
+//            tiles[i].Tile_PNG[j].setsize(16,16,1);
+          except
+            Tiles[i].Tile_PNG[j]:=nil;
+          end;
   end;
 
-  RoseR:=load3d('DAT'+pathdelim+'models'+pathdelim+'Rose.x3d');
   RoseS:=TCastleScene.create(Window.sceneManager);
   RoseS.spatial := [ssRendering];
   RoseS.processevents:=true;
-  RoseS.load(RoseR,true);
-{  LightR:=load3d('light.x3d');
-  LightS:=TCastleScene.create(Window.sceneManager);
-  LightS.spatial := [ssRendering];
-  LightS.processevents:=true;
-  LightS.load(LightR,true);}
+  RoseS.load(models_folder+'Rose.x3d');
 end;
 {---------------------------------------------------------------------------}
+//basic get map procedure. Simply does all routine checking that the gx,gy,gz is not out of bounds.
 function getMap(gx,gy,gz:integer):Basic_Tile_Type;
 begin
   if (gx>0)     and (gy>0)     and (gz>0) and
@@ -797,6 +814,7 @@ begin
     GetMap.base:=tile_inacceptible;
 end;
 {---------------------------------------------------------------------------}
+// get inverse angle for the incoming angle to match the faces
 function InverseAngle(inangle:byte):byte;
 begin
  case inangle of
@@ -807,6 +825,8 @@ begin
  end;
  //todo inverseAngle:=inangle+maxangle/2
 end;
+
+// x and y shift determined by incoming angle
 function a_dx(angle:byte):shortint;
 begin
   a_dx:=0;
@@ -820,6 +840,9 @@ begin
   if angle=angle_bottom then a_dy:=1;
 end;
 {---------------------------------------------------------------------------}
+//The most important procedure - compares incoming 1x1x1 base tiles to the Map.
+// Returns false if tile mismatches Map
+// Returns True if tile matches Map and can be placed
 function CheckTileCompatible(InTile:Basic_Tile_Type;cx,cy,cz:integer):boolean;
 var TmpTile:Basic_Tile_Type;
     i:integer;
@@ -844,18 +867,21 @@ begin
 end;
 
 {---------------------------------------------------------------------------}
+// This is a procedure to put the tile at x,y,z
+// returns true if tile is put successfully and false if the tile cannot be placed at these coordinates
 function putTile(InTileType,x,y,z:integer):boolean;
 var jx,jy,jz,jj:integer;
     TileCanBePlaced:boolean;
 begin
  with tiles[InTileType] do begin
   TileCanBePlaced:=true;
+  //check all tiles against map area they are placed to
   for jx:=1 to tilesizex do
    for jy:=1 to tilesizey do
     for jz:=1 to tilesizez do TileCanBePlaced:=TileCanBePlaced and CheckTileCompatible(TileMap[jx,jy,jz],x+jx-1,y+jy-1,z+jz-1);
   if TileCanBePlaced then begin
 //    if InTileType=21 then memo1.lines.add('21!');
-
+    // if tile can be placed - then place it
     for jx:=1 to tilesizex do
      for jy:=1 to tilesizey do
       for jz:=1 to tilesizez do begin
@@ -865,37 +891,29 @@ begin
         for jj:=1 to 2 do
           if TileMap[jx,jy,jz].floor[jj]<>tile_na then Map[x+jx-1,y+jy-1,z+jz-1].floor[jj]:=TileMap[jx,jy,jz].floor[jj];
       end;
-    //place 3D tile
+    // Prepare a Generator step for placing a tile
+    // to create a 3D world later
     inc(n_tiles);
-    MapTiles[n_tiles]:=T3DTransform.Create(Window.SceneManager);
-    MapTiles[n_tiles].add(Tiles[inTileType].Tile_scene);
-{    MapTiles[n_tiles].add(Lights);}
-    MapTiles[n_tiles].translation:=Vector3Single(-2*myscale*(x),-2*myscale*(z),-2*myscale*(y));
-    MapTiles[n_tiles].scale:=Vector3Single(myscale,myscale,myscale);
-    Window.Scenemanager.items.add(MapTiles[n_tiles]);
-
-{    LightT:=T3DTransform.Create(Window.SceneManager);
-    LightT.add(LigthS);
-    LightT.translation:=Vector3Single(-2*myscale*(x),-2*myscale*(z),-2*myscale*(y));
-    LightT.scale:=Vector3Single(myscale,myscale,myscale);
-    Window.Scenemanager.items.add(LightT);}
-
+    GeneratorSteps[n_tiles].Tile_Type:=inTileType;
+    GeneratorSteps[n_tiles].tx:=x;
+    GeneratorSteps[n_tiles].ty:=y;
+    GeneratorSteps[n_tiles].tz:=z;
     PutTile:=true;
   end else PutTile:=false;
  end;
 end;
 
 {---------------------------------------------------------------------------}
+// Base Map generation procedure.
 procedure GenerateMap;
-var i,ix,iy,iz:integer;
+var i,j,ix,iy,iz:integer;
     tx,ty,tz,ta,tt:integer;
     startx,starty,startz:integer;
     FreeFaces:integer;
     flg:boolean;
     shiftx,shifty,shiftz:integer;
-begin
- //memo1.clear;
 
+begin
  n_tiles:=0;
  randomize;
  //erase map;
@@ -953,7 +971,8 @@ begin
          if (GetMap(tx,ty,tz).faces[ta]>=face_free) and (GetMap(tx+a_dx(ta),ty+a_dy(ta),tz).faces[inverseAngle(ta)]=face_na) then flg:=true;
        until flg;
      end;
-     //try to place a random tile at the face exit
+
+     //try to place a random tile at a free face exit
      flg:=false;
      Repeat
 
@@ -1014,12 +1033,15 @@ begin
    end;
  until (freeFaces=0){ or (random<0.001)};
 
- //memo1.lines.add('Map Area = '+inttostr(MapArea)+'/'+inttostr(Target_Map_Area));
- //if MapArea<Target_Map_Area then memo1.lines.add('Target failed by '+inttostr(round((Target_Map_Area-MapArea)/Target_Map_Area*100))+'%') else
- //                                memo1.lines.add('Target met with excess of '+inttostr(round((MapArea-Target_Map_Area)/Target_Map_Area*100))+'%');
- //memo1.lines.add('Deepest level = '+inttostr(Deepest_level)+'/'+inttostr(Maxz));
+ //show some debug information
+ writeln('Map Area = '+inttostr(MapArea)+'/'+inttostr(Target_Map_Area));
+ if MapArea<Target_Map_Area then writeln('Target failed by '+inttostr(round((Target_Map_Area-MapArea)/Target_Map_Area*100))+'%') else
+                                 writeln('Target met with excess of '+inttostr(round((MapArea-Target_Map_Area)/Target_Map_Area*100))+'%');
+ writeln('Tiles = '+inttostr(n_tiles));
+ writeln('Deepest level = '+inttostr(Deepest_level)+'/'+inttostr(Maxz));
 
- //create distance map;
+ //create distance map; basic for pathfinding
+ // now only used to place a rose at the most distant place of the map
  for ix:=1 to maxx do
   for iy:=1 to maxy do
    for iz:=1 to maxz do distanceMap[ix,iy,iz]:=-1;
@@ -1048,6 +1070,35 @@ begin
          end;
      end;
  until flg;
+
+  // Generation finished.
+  // NOW: Create the scene {todo: and slice it into chunks}
+   for i:=1 to n_tiles do begin
+     MapTiles[i]:=T3DTransform.Create(Window.SceneManager);
+     MapTiles[i].add(Tiles[GeneratorSteps[i].Tile_type].Tile_scene);
+     MapTiles[i].translation:=Vector3Single(-2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].tz),-2*myscale*(GeneratorSteps[i].ty));
+     MapTiles[i].scale:=Vector3Single(myscale,myscale,myscale);
+     Window.Scenemanager.items.add(MapTiles[i]);
+ //    window.scenemanager.items.remove(MapTiles[n_tiles]);
+   end;
+
+ //DrawMinimap;
+   for iz:=1 to maxz do begin
+     minimap[iz]:=LoadImage(Models_Folder+'0.png');     //BUG: it's the only way I could initialize TCastleImage...????????
+     //minimap[iz]:=(minimap[iz] as TRGBImage).ToRGBAlphaImage;
+     minimap[iz].setsize((maxx)*16-1,(maxy)*16-1,1);
+     for i:=1 to n_tiles do with Tiles[GeneratorSteps[i].Tile_Type] do
+      for j:=1 to tilesizez do
+        if GeneratorSteps[i].tz+j-1=iz then begin
+          if Tile_PNG[j]<>nil then
+            try
+              Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps[i].tx-1)*16,(maxy-GeneratorSteps[i].ty-tilesizey+1)*16);
+            except
+              writeln(Tile_PNG[j].width,'x',Tile_PNG[j].height,' - ',Tile_PNG[j].classname,' vs ',Minimap[iz].classname);
+            end;
+        end;
+    end;
+   //now find the max distance
  max_distance:=0;
  for ix:=1 to maxx do
   for iy:=1 to maxy do
@@ -1057,40 +1108,152 @@ begin
      tz:=iz;
      max_Distance:=distanceMap[ix,iy,iz];
    end;
- //memo1.lines.add('Max distance = '+inttostr(Max_distance));
-// memo1.lines.add('at '+inttostr(tx)+';'+inttostr(ty)+';'+inttostr(tz));
-     RoseT:=T3DTransform.Create(Window.SceneManager);
-     RoseT.add(RoseS);
-     RoseT.translation:=Vector3Single(-2*myscale*(tx),-2*myscale*(tz),-2*myscale*(ty));
-     RoseT.scale:=Vector3Single(myscale,myscale,myscale);
-     Window.Scenemanager.items.add(RoseT);
-     Rosex:=tx;
-     Rosey:=ty;
-     Rosez:=tz;
-     RoseFound:=false;
-//     RoseTransform := RoseS.RootNode.FindNodeByName(TTransformNode,'Cylinder_TRANSFORM', true) as TTransformNode;
+  writeln('Max distance = '+inttostr(Max_distance));
+  writeln('at '+inttostr(tx)+';'+inttostr(ty)+';'+inttostr(tz));
+
+   //PlaceRose;
+   RoseT:=T3DTransform.Create(Window.SceneManager);
+   RoseT.add(RoseS);
+   RoseT.translation:=Vector3Single(-2*myscale*(tx),-2*myscale*(tz),-2*myscale*(ty));
+   RoseT.scale:=Vector3Single(myscale,myscale,myscale);
+   Window.Scenemanager.items.add(RoseT);
+   Rosex:=tx;
+   Rosey:=ty;
+   Rosez:=tz;
+   RoseFound:=false;
+  //     RoseTransform := RoseS.RootNode.FindNodeByName(TTransformNode,'Cylinder_TRANSFORM', true) as TTransformNode;
+
+  //3d World creation finished;
 
  //clear visible
  for ix:=1 to maxx do
   for iy:=1 to maxy do
    for iz:=1 to maxz do begin
      vis[ix,iy,iz]:=show_map_boolean;
-     chngd[ix,iy,iz]:=true;
    end;
- oldx:=-1;
+ oldz:=-1;
 end;
 
+{************************************************************************}
+var lasttime:TDateTime=-1;
+    framecount:integer=0;
+    visible_changed:boolean=false;
+procedure set_vis(vx,vy,vz:integer);
+begin
+ if (vx>0) and (vy>0) and (vz>0) and (vx<=maxx) and (vy<=maxy) and (vz<=maxz) then
+   if not vis[vx,vy,vz] then begin
+     vis[vx,vy,vz]:=true;
+     Visible_Changed:=true;
+     inc(explored_area);
+   end;
+end;
 
+procedure Update(Container: TUIContainer);
+var i,j,ix,iy,iz:integer;
+    copymap:TCastleImage;
+begin
+ //show fps
+ if oldz>0 then visible_changed:=false else visible_changed:=true;
+ inc(framecount);
+ if (lasttime>0) and ((now-lasttime)>1/24/60/60) then begin
+   label_FPS.text.text:=inttostr(framecount{round(1/(now-lasttime)/24/60/60)});
+   framecount:=0;
+   lasttime:=now;
+ end;
+ if lasttime<0 then  lasttime:=now;
+
+ //get player location
+ px:=round(-(Player.position[0])/myscale/2);
+ if px<1 then px:=1;
+ if px>maxx then px:=maxx;
+ py:=round(-(Player.position[2])/myscale/2);
+ if py<1 then py:=1;
+ if py>maxy then py:=maxy;
+ pz:=round(-(Player.position[1]-1)/myscale/2);
+ if pz<1 then pz:=1;
+ if pz>maxz then pz:=maxz;
+ set_vis(px,py,pz);
+ if (map[px,py,pz].faces[angle_left]<>face_wall) then set_vis(px-1,py,pz);
+ if (map[px,py,pz].faces[angle_right]<>face_wall) then set_vis(px+1,py,pz);
+ if (map[px,py,pz].faces[angle_top]<>face_wall) then set_vis(px,py-1,pz);
+ if (map[px,py,pz].faces[angle_bottom]<>face_wall) then set_vis(px,py+1,pz);
+
+ //show the minimap
+ if (oldz<>pz) or (visible_changed) then begin
+   Copymap:=LoadImage(Models_Folder+'0.png');     //BUG: it's the only way I could initialize TCastleImage...????????
+   Copymap.setsize((maxx)*16,(maxy)*16,1);
+   for ix:=1 to maxx do
+    for iy:=1 to maxy do
+     if vis[ix,iy,pz] then
+       copymap.drawFrom(minimap[pz],(ix-1)*16,(maxy-iy)*16,(ix-1)*16,(maxy-iy)*16,16,16)
+     else
+       copymap.drawFrom(zero_png,(ix-1)*16,(maxy-iy)*16,0,0,16,16);
+   Map_IMG.left:=Window.width-Map_Img.image.width;
+   map_img.bottom:=0;//Map_Img.image.height;
+   Map_IMG.image:=nil;
+   Map_IMG.image:=Copymap.makecopy;
+   freeandnil(copymap);
+ end;
+ //Check if Rose is found
+ if visible_changed then
+ if (not RoseFound) and (not show_map_boolean) then
+   if vis[rosex,rosey,rosez] then begin
+     RoseFound:=true;
+     RoseLabel:=TCastleLabel.create(Window);
+     RoseLabel.Left:=window.width div 2-200;
+     RoseLabel.bottom:=window.height *2 div 3;
+     RoseLabel.text.text:='CONGRATULATIONS!!! You have found the rose!';
+     Window.Controls.InsertFront(RoseLabel);
+   end;
+
+ if visible_changed then
+   Explored_Label.text.text:='Explored: '+inttostr(round(Explored_Area/MapArea*100))+'%';
+
+
+ //show player location
+ Player_IMG.left:=Map_IMG.left+round(((-Player.position[0]/myscale/2-0.5))*16-3);//Map_IMG.left+Map_IMG.width-;
+ Player_IMG.bottom:=Map_IMG.bottom+round((maxy-(-Player.position[2]/myscale/2-0.5))*16-3);//Map_IMG.bottom-Map_IMG.height+round(*16);
+
+
+ oldz:=pz;
+end;
 
 {==========================================================================}
 {================================= MAIN ===================================}
 {==========================================================================}
+Var i:integer;
 begin
-  Window := TCastleWindow.Create(Application);
-
   maxx:=maxmaxx;
   maxy:=maxmaxy;
   maxz:=maxmaxz;
+  Window := TCastleWindow.Create(Application);
+
+  Label_fps:=TCastleLabel.create(Window);
+  label_fps.Left:=0;
+  label_fps.bottom:=0;
+  Label_fps.text.text:='-';
+  Window.Controls.InsertFront(Label_fps);
+
+  Explored_label:=TCastleLabel.create(Window);
+  Explored_label.Left:=100;
+  Explored_label.bottom:=0;
+  Explored_label.text.text:='0%';
+  Window.Controls.InsertFront(Explored_label);
+
+  Zero_png:=LoadIMage(Models_folder+'0.png');
+
+  Map_Img:=TCastleImageControl.create(Window);
+  Map_IMG.image:=LoadIMage(Models_folder+'0.png');
+  Map_IMG.image.setsize((maxx)*16-1,(maxy)*16-1,1);
+  //Map_IMG.image.clear(Vector4single(0,0,0,0));  // NOT WORKING???
+  Window.Controls.InsertFront(Map_IMG);
+
+  Player_IMG:=TCastleImageControl.create(Window);
+  Player_IMG.image:=LoadIMage(Models_Folder+'player.png');
+  Player_IMG.left:=0;
+  Player_IMG.bottom:=0;
+  Window.Controls.InsertFront(Player_IMG);
+
   LoadTiles;
   GenerateMap;
 
@@ -1098,9 +1261,6 @@ begin
   Window.SceneManager.Items.Add(Player);
   Window.SceneManager.Player := Player;
   player.Camera.MouseLook:=true;
-{   player.camera.Input_Jump.assign(K_Space);
-  player.camera.JumpMaxHeight:=1;
-  player.camera.JumpTime:=1;}
   player.DefaultPreferredHeight:=1;
   player.DefaultMoveHorizontalSpeed:=3;
   player.Camera.MouseLookHorizontalSensitivity:=0.5;
@@ -1109,28 +1269,10 @@ begin
   player.camera.FallingEffect:=false;
   Window.scenemanager.camera:=player.camera;
 
-{ WalkCamera:=TWalkCamera.create(Window.SceneManager);
-WalkCamera.Init(Vector3Single(-2*myscale*(maxx div 2),-2*myscale+1,-2*myscale*(maxy div 2)),vector3single(0,0,-1),vector3single(0,1,0),vector3single(0,1,0),2,0.1);
-WalkCamera.mouselook:=true;
-//WalkCamera.MoveHorizontalSpeed:=5;
-Window.scenemanager.camera:=WalkCamera;  }
-
-{  LightNode := TPointLightNode.Create('', '');
-LightNode.FdLocation.Value := player.position;
-
-LightInstance.Node := LightNode;
-LightInstance.Transform := IdentityMatrix4Single;
-LightInstance.TransformScale := 1;
-LightInstance.Location := player.position;
-LightInstance.Radius := 1000;
-
-RenderParams := TBasicRenderParams.Create;
-RenderParams.FBaseLights.Add(LightInstance);}
-
-//DrawMap;
-
-
+  Window.OnUpdate:=@Update;
   Window.Open;
   Application.Run;
+
+  for i:=1 to maxTilesTypes do freeandnil(Tiles[i].Tile_PNG);
 end.
 
