@@ -387,7 +387,8 @@ begin
 
     writeln('Map created in ',round((now-LastTimeStamp)*24*60*60*1000),'ms');
     if not ((Target_Map_Area-MapArea)/Target_Map_Area<0.05) then writeln('Target failed by more than 5%. Re-generating map...');
-  until ((Target_Map_Area-MapArea)/Target_Map_Area<0.05);
+    if not (deepest_Level=maxz) then writeln('Not all levels of the dungeons used. Re-generating map...');
+  until (((Target_Map_Area-MapArea)/Target_Map_Area<0.05) and (deepest_Level=maxz)) or (random<0.01);
 
   writeln('Job finished in ',round((now-timestamp)*24*60*60*1000),'ms');
 
