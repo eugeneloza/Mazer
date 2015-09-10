@@ -6,10 +6,12 @@ interface
 
 uses
   Classes, SysUtils,
-  castlescene, castleimages, castlescenecore,
+  castlescene, castleimages, castlescenecore, X3DNodes,
   generic_var;
 
 const MaxTilesTypes = 51;
+
+const anisotropic_smoothing=false;
 
 // constants for tiles and faces
 
@@ -48,7 +50,7 @@ end;
 const maxtilesize = 3;   {max tile size (square tiles)}
       maxtilesizez = 2;   {max tile height}
 type Map_Tile_type = record
-//  Tile3D: TX3DRootNode;
+  Tile3D: TX3DRootNode;
   Tile_scene: TCastleScene;
   Tile_PNG: array[1..maxtilesizez] of TCastleImage;
   TileFreeFaces:byte;
@@ -739,7 +741,10 @@ begin
     Tiles[i].Tile_scene:= TCastleScene.create(Window.sceneManager);
     Tiles[i].Tile_scene.spatial := [ssRendering, ssDynamicCollisions];
     Tiles[i].Tile_scene.processevents:=true;
-    Tiles[i].Tile_scene.load(models_folder+inttostr(i)+'.x3d');
+    if anisotropic_smoothing then
+      Tiles[i].Tile_scene.load(models_folder+inttostr(i)+'a.x3d')
+    else
+      Tiles[i].Tile_scene.load(models_folder+inttostr(i)+'.x3d');
 //    Tiles[i].Tile3D:=Load3D(models_folder+inttostr(i)+'.x3d');
 
     //load png tile for the mini-map

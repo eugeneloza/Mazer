@@ -8,9 +8,9 @@ uses
   Classes, SysUtils,
   CastleWindow;
 
-const maxmaxx=15;
-      maxmaxy=15;
-      maxmaxz=9;
+const maxmaxx=10;
+      maxmaxy=10;
+      maxmaxz=4;
       maxMapTiles=maxmaxx*maxmaxy*maxmaxz;
 
       const Target_Map_Area=maxmaxx*maxmaxy*maxmaxz div 2;
