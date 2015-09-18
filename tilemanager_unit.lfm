@@ -7,7 +7,7 @@ object Form1: TForm1
   ClientHeight = 521
   ClientWidth = 728
   OnCreate = FormCreate
-  LCLVersion = '1.4.2.0'
+  LCLVersion = '1.4.0.3'
   object CastleControl1: TCastleControl
     Left = 3
     Height = 512
@@ -17,10 +17,10 @@ object Form1: TForm1
   end
   object ComboBox1: TComboBox
     Left = 520
-    Height = 21
+    Height = 25
     Top = 8
     Width = 136
-    ItemHeight = 13
+    ItemHeight = 0
     Sorted = True
     Style = csDropDownList
     TabOrder = 1
