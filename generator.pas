@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils,
   castle_base, CastleWindow,
-  castlescene, castlescenemanager,
+  castlescene, castlescenecore, castlescenemanager,
   castle3d, castlevectors,  X3DNodes, CastleImages,
   Tile_var, generic_var;
 
@@ -19,7 +19,9 @@ end;
 var n_tiles:integer;
     maxx,maxy,maxz:byte;
 
-    MapTiles: array[1..maxMapTiles] of T3DTransform;
+    MapTiles: array[1..maxMapTiles] of TTransformNode;
+    MainRoot: TX3DRootNode;
+    MainScene: TCastleScene;
     Map: array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of Basic_Tile_Type;
     GeneratorSteps: array[1..maxMapTiles] of Generator_type;
 
@@ -340,6 +342,7 @@ begin
          if Tile_PNG[j]<>nil then
            try
              Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps[i].tx-1)*16,(maxy-GeneratorSteps[i].ty-tilesizey+1)*16);
+             if blocker then writeln('blocker drawn');
            except
              writeln(Tile_PNG[j].width,'x',Tile_PNG[j].height,' - ',Tile_PNG[j].classname,' vs ',Minimap[iz].classname);
            end;
@@ -354,14 +357,22 @@ procedure MakeScene;
 var i:integer;
 begin
 // NOW: Create the scene {todo: and slice it into chunks}
+ MainRoot := TX3DRootNode.Create('', '');
  for i:=1 to n_tiles do begin
-   MapTiles[i]:=T3DTransform.Create(Window.SceneManager);
-   MapTiles[i].add(Tiles[GeneratorSteps[i].Tile_type].Tile_scene);
+   MapTiles[i]:=TTransformNode.Create('','');
+   MapTiles[i].fdchildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d);
    MapTiles[i].translation:=Vector3Single(-2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].tz),-2*myscale*(GeneratorSteps[i].ty));
    MapTiles[i].scale:=Vector3Single(myscale,myscale,myscale);
-   Window.Scenemanager.items.add(MapTiles[i]);
-//    window.scenemanager.items.remove(MapTiles[n_tiles]);
+
+   MainRoot.FdChildren.Add(MapTiles[i]);
  end;
+ //    window.scenemanager.items.remove(MapTiles[n_tiles]);
+ MainScene:=TCastleScene.create(window);
+ MainScene.load(MainRoot,true);
+ MainScene.Spatial := [ssRendering, ssDynamicCollisions];
+ MainScene.ProcessEvents := true;
+ Window.Scenemanager.items.add(MainScene);
+
 end;
 
 {=====================================================================}

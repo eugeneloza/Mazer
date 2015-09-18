@@ -15,6 +15,8 @@ uses
 
   Tile_var, generic_var, Generator;
 
+const delta=0.15;
+
 type
 
   { TForm1 }
@@ -24,6 +26,7 @@ type
     Button2: TButton;
     Button3: TButton;
     Button4: TButton;
+    Button5: TButton;
     CastleControl1: TCastleControl;
     ComboBox1: TComboBox;
     Image1: TImage;
@@ -33,6 +36,7 @@ type
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
     procedure Button4Click(Sender: TObject);
+    procedure Button5Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Image1MouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -95,7 +99,7 @@ begin
   reset(file1);
   {$I+}
   if ioresult=0 then begin
-    AssignFile(file2,filename);
+    AssignFile(file2,'a'+filename);
     rewrite(file2);
     repeat
       readln(file1,s);
@@ -126,11 +130,11 @@ begin
         readln(file1,s); //and delete one more line - blender specific
         //now write a multitexture to the file
         writeln(file2,'<MultiTexture DEF="IM" mode='+#39+'"DOTPRODUCT3" "MODULATE"'+#39+' >');
-        writeln(file2,'<ImageTexture url="'+texture_normal+'">');
-        writeln(file2,'<TextureProperties anisotropicDegree="4"/>');
+        writeln(file2,'<ImageTexture url='+#39+'"'+texture_normal+'"'+#39+'>');
+        writeln(file2,'<TextureProperties anisotropicDegree="8" magnificationFilter="DEFAULT" minificationFilter="DEFAULT"/>');
         writeln(file2,'</ImageTexture>');
-        writeln(file2,'<ImageTexture url="'+texture_diffuse+'">');
-        writeln(file2,'<TextureProperties anisotropicDegree="4"/>');
+        writeln(file2,'<ImageTexture url='+#39+'"'+texture_diffuse+'"'+#39+'>');
+        writeln(file2,'<TextureProperties anisotropicDegree="8" magnificationFilter="DEFAULT" minificationFilter="DEFAULT"/>');
         writeln(file2,'</ImageTexture>');
         writeln(file2,'</MultiTexture>');
       end else
@@ -319,6 +323,12 @@ end;
 procedure TForm1.Button4Click(Sender: TObject);
 begin
   Fix_x3d(combobox1.Items[combobox1.itemindex]);
+end;
+
+procedure TForm1.Button5Click(Sender: TObject);
+var im:integer;
+begin
+  for im:=0 to combobox1.Items.Count-1 do Fix_x3d(combobox1.Items[im]);
 end;
 
 {------------------------------------------------}

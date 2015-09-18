@@ -143,6 +143,7 @@ begin
   maxy:=maxmaxy;
   maxz:=maxmaxz;
   Window := TCastleWindow.Create(Application);
+  //window.doublebuffer:=true;
 
   Label_fps:=TCastleLabel.create(Window);
   label_fps.Left:=0;
@@ -182,10 +183,12 @@ begin
   player.Camera.MouseLookHorizontalSensitivity:=0.5;
   player.Camera.MouseLookVerticalSensitivity:=0.5;
   player.position:=Vector3Single(-2*myscale*(maxx div 2),-2*myscale+(player.DefaultPreferredHeight),-2*myscale*(maxy div 2));
-  player.camera.FallingEffect:=false;
+//  player.FallingEffect:=false;
   Window.scenemanager.camera:=player.camera;
 
   Window.OnUpdate:=@Update;
+  Window.ShadowVolumes := true;
+  Window.StencilBits := 8;
   Window.Open;
   Application.Run;
 

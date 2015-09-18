@@ -55,7 +55,6 @@
       <Unit2>
         <Filename Value="generic_var.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="generic_var"/>
       </Unit2>
       <Unit3>
         <Filename Value="tile_var.pas"/>
