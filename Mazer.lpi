@@ -49,7 +49,6 @@
           <Linking>
             <Debugging>
               <DebugInfoType Value="dsDwarf2Set"/>
-              <UseHeaptrc Value="True"/>
               <UseExternalDbgSyms Value="True"/>
             </Debugging>
           </Linking>
@@ -97,11 +96,10 @@
         <PackageName Value="castle_base"/>
       </Item2>
     </RequiredPackages>
-    <Units Count="4">
+    <Units Count="5">
       <Unit0>
         <Filename Value="Mazer.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Mazer"/>
       </Unit0>
       <Unit1>
         <Filename Value="tile_var.pas"/>
@@ -111,13 +109,17 @@
       <Unit2>
         <Filename Value="generic_var.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="generic_var"/>
       </Unit2>
       <Unit3>
         <Filename Value="generator.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Generator"/>
       </Unit3>
+      <Unit4>
+        <Filename Value="mazermapparser.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="MazerMapParser"/>
+      </Unit4>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -132,7 +134,7 @@
     </SearchPaths>
   </CompilerOptions>
   <Debugging>
-    <Exceptions Count="3">
+    <Exceptions Count="4">
       <Item1>
         <Name Value="EAbort"/>
       </Item1>
@@ -142,6 +144,9 @@
       <Item3>
         <Name Value="EFOpenError"/>
       </Item3>
+      <Item4>
+        <Name Value="BreakTryFindNode"/>
+      </Item4>
     </Exceptions>
   </Debugging>
 </CONFIG>

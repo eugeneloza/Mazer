@@ -1,4 +1,4 @@
-{Copyright (C) 2015 Yevhen Loza
+{Copyright (C) 2015-2016 Yevhen Loza
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -13,23 +13,35 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.}
 
-{$R-}{$Q-}
+{$R+}{$Q+}
 program Mazer;
 
 uses
-  SysUtils,
+  SysUtils, {$IFDEF UNIX}cthreads,{$ENDIF} Classes,
   castle_base, castle_window, CastleWindow,
   castlescene, castlescenecore, castlescenemanager,
   castle3d, castlevectors,  X3DNodes, x3dload,
   castleplayer, castlecameras, CastleImages,
-  CastleControls{for TCastleLAbel},
-   Tile_var, generic_var, Generator;
+  CastleControls,
+  CastleOpenAL, CastleSoundEngine, CastleTimeUtils,
+  Tile_var, generic_var, Generator, MazerMapParser;
   ///, CastleFreeType, CastleFonts, CastleUnicode, CastleStringUtils,
 
-
 const show_map_boolean=false;
+const play_music=true;
+const loadscreenanimationspeed=12;
 
-
+//this thread will generate the map in the background
+type TGenerationThread = class(TThread)
+  private
+  protected
+    procedure Execute; override;
+end;
+type TMusicLoadThread = class(TThread)
+  private
+  protected
+    procedure Execute; override;
+end;
 
 var
 
@@ -37,13 +49,25 @@ var
   px,py,pz,oldz: integer;
 
   Player:TPlayer;
+  PlayerTile,PlayerTileOld:integer;
+  firstRender:boolean;
 
-  Label_FPS,explored_label:TCastleLabel;
+  Label_FPS,explored_label,Tile_label:TCastleLabel;
   RoseLabel:TCastleLabel;
 
   zero_png:TCastleImage;
   Map_img,Player_Img:TCastleImageControl;
 
+  music: TSoundBuffer;
+  music_duration: TFloatTime;
+  oldmusic:integer;
+  MusicLoadThread:TMusicLoadThread; //thread to load music in background to avoid lags
+  footsteps_sound:TSoundBuffer;
+
+  gamemode:integer;
+  loadscreen_img: TCastleImageControl;
+  Loadscreen_label: TCastleLabel;
+  GenerationThread:TGenerationThread; //thread for generating the dungeon in background
 
 {==========================================================================}
 {============================ PROCEDURES ==================================}
@@ -54,7 +78,7 @@ var
 procedure GenerateMap;
 var ix,iy,iz:integer;
 begin
- MakeMap;
+ MakeMap; //ask Generator to produce a map
 
  //clear visible
  for ix:=1 to maxx do
@@ -65,10 +89,76 @@ begin
  oldz:=-1;
 end;
 
+{=======================================================================}
+
+{ This procedure is a Chunk manager.
+During generation process we've chunked our map into areas (not yet, actually, but soon).
+Those areas are everything that is visible from this tile.
+Everything else is switched-off by TSwitchNode to keep FPS.
+Later we'll make some LODs here also.
+
+At this moment it just grabs current level the player is on and one level above and one below.
+Produces glitches and very inefficient, but easy-to-do and better-than-nothing.
+}
+var Ptile,POtile:integer;
+procedure ChunkManager(Container: TUIContainer);
+var i,px,py,pz:integer;
+begin
+ // temporary plug to raise FPS a little
+ // I just switch off all tiles with z - player z greater than 1
+ // this produces glitches at 2 and more storyed stairs, but I don't care yet :D
+ // I'll fix this later
+
+ if not firstrender then begin
+   px:=round((Player.position[0])/myscale/2);
+   if px<1 then px:=1;
+   if px>maxx then px:=maxx;
+   py:=round(-(Player.position[1])/myscale/2);
+   if py<1 then py:=1;
+   if py>maxy then py:=maxy;
+   pz:=round(-(Player.position[2]-1)/myscale/2);
+   if pz<1 then pz:=1;
+   if pz>maxz then pz:=maxz;
+   Ptile:=MapTileIndex[px,py,pz];
+   if (Ptile<>POtile) then begin
+      for i:=1 to n_tiles do
+       if abs(generatorSteps[i].tz-pz)<=1 then
+        MapSwitches[i].WhichChoice:=0 else MapSwitches[i].WhichChoice:=-1;
+   end;
+   POtile:=Ptile;
+ end;
+
+ // !!!! WELL, PARCTICALLY THIS ONE DOES NOT WORK (yet)
+
+{ if (playerTile<>PlayerTileOld) and (not firstrender) then begin
+   Tile_label.text.text:=(Tiles[GeneratorSteps[PlayerTile].Tile_Type].TileName);
+   for i:=1 to n_tiles do begin
+    //boogy wooogy!!!!!!!!!!!!! FIX IT NOW!!!
+    if (Neighbours[PlayerTile,i]>0) and (MapLoaded[i]=0) then begin
+      //add this one to the visible chunk
+      mapLoaded[i]:=Neighbours[PlayerTile,i];
+      //MapTiles[i].FdRender.Value:=true;
+      //MainRoot.FdChildren.replace(i-1,MapTiles[i]);
+    end else
+    if (Neighbours[PlayerTile,i]=0) and (MapLoaded[i]>0) then begin
+      //remove unnecessary chunks
+      mapLoaded[i]:=0;
+      //MapTiles[i].FdRender.Value:=false;
+      //writeln('node removed');
+      //MainRoot.FdChildren.replace(i-1,MapTiles[i]);
+    end;
+  end;
+  //MainScene.load(MainRoot,true);
+ end;        }
+end;
+
 {************************************************************************}
 var lasttime:TDateTime=-1;
+    starttime:TDateTime;
+    loadscreentime:TDateTime=-1;
     framecount:integer=0;
     visible_changed:boolean=false;
+// set visible for a tile with all range-checking and etc.
 procedure set_vis(vx,vy,vz:integer);
 begin
  if (vx>0) and (vy>0) and (vz>0) and (vx<=maxx) and (vy<=maxy) and (vz<=maxz) then
@@ -83,130 +173,331 @@ procedure Update(Container: TUIContainer);
 var ix,iy:integer;
     copymap:TCastleImage;
 begin
- //show fps
- if oldz>0 then visible_changed:=false else visible_changed:=true;
- inc(framecount);
- if (lasttime>0) and ((now-lasttime)>1/24/60/60) then begin
-   label_FPS.text.text:=inttostr(framecount{round(1/(now-lasttime)/24/60/60)});
-   framecount:=0;
-   lasttime:=now;
+    if gamemode=gamemode_game then begin
+
+     //show fps
+     if oldz>0 then visible_changed:=false else visible_changed:=true;
+     inc(framecount);
+     if (lasttime>0) and ((now-lasttime)>1/24/60/60) then begin
+       label_FPS.text.text:=inttostr(framecount{round(1/(now-lasttime)/24/60/60)});
+       framecount:=0;
+       lasttime:=now;
+     end;
+
+     if lasttime<0 then begin
+       Window.Controls.InsertFront(Label_fps);
+       Window.Controls.InsertFront(Explored_label);
+       Window.Controls.InsertFront(Tile_label);
+       Window.Controls.InsertFront(Map_IMG);
+       Window.Controls.InsertFront(Player_IMG);
+
+       lasttime:=now;
+       starttime:=now;
+     end else begin
+      //animate the rose
+       (RoseS.RootNode.FdChildren[2] as TTRansformNode).FdRotation.Value:=vector4Single(0,0,1,(now-starttime)*24*60*60*2);
+       (RoseS.RootNode.FdChildren[2] as TTRansformNode).FdRotation.changed;
+     end;
+
+     //get player location
+     px:=round((Player.position[0])/myscale/2);
+     if px<1 then px:=1;
+     if px>maxx then px:=maxx;
+     py:=round(-(Player.position[1])/myscale/2);
+     if py<1 then py:=1;
+     if py>maxy then py:=maxy;
+     pz:=round(-(Player.position[2]-1)/myscale/2);
+     if pz<1 then pz:=1;
+     if pz>maxz then pz:=maxz;
+     //set visible all tiles ajacent to the player
+     set_vis(px,py,pz);
+     if (map[px,py,pz].faces[angle_left]<>face_wall) then set_vis(px-1,py,pz);
+     if (map[px,py,pz].faces[angle_right]<>face_wall) then set_vis(px+1,py,pz);
+     if (map[px,py,pz].faces[angle_top]<>face_wall) then set_vis(px,py-1,pz);
+     if (map[px,py,pz].faces[angle_bottom]<>face_wall) then set_vis(px,py+1,pz);
+     if (map[px,py,pz].floor[angle_stairs_up]<>floor_wall) then set_vis(px,py,pz-1);
+     if (map[px,py,pz].floor[angle_stairs_down]<>floor_wall) then set_vis(px,py,pz+1);
+
+     PlayerTile:=MapTileIndex[px,py,pz];
+     if playertile>0 then Tile_label.text.text:=(Tiles[GeneratorSteps[PlayerTile].Tile_Type].TileName)+' : ('+inttostr(px)+','+inttostr(py)+','+inttostr(pz)+')';
+     if not firstrender then begin
+       playerTileOld:=PlayerTile;
+     end else
+       firstrender:=false;
+
+     //show the minimap
+     if (oldz<>pz) or (visible_changed) then begin
+       //create a temporary image and copy current minimap[pz] if this tile is 'visible'
+       Copymap:=LoadImage(etc_Models_Folder+'0.png', [TRGBAlphaImage]) as TRGBAlphaImage;       //BUG: it's the only way I could initialize TCastleImage properly...????????
+       Copymap.setsize((maxx)*16,(maxy)*16,1);
+       Copymap.Clear(Vector4Byte(0,0,0,0));
+       for ix:=1 to maxx do
+        for iy:=1 to maxy do
+         if vis[ix,iy,pz] then
+           copymap.drawFrom(minimap[pz],(ix-1)*16,(maxy-iy)*16,(ix-1)*16,(maxy-iy)*16,16,16,dmBlendSmart);
+       //BUG! I need dmBlend (practically just replace/mov) here, not dmBlendSmart, but dmBlend leaves alpha=0.
+         {else
+           copymap.drawFrom(zero_png,(ix-1)*16,(maxy-iy)*16,0,0,16,16,dmBlend);}
+         //BUG! this one stopped working at some point...
+       Map_IMG.left:=Window.width-Map_Img.image.width; //plug it to right-bottom corner in case of window resize
+       map_img.bottom:=0;//Map_Img.image.height;
+       Map_IMG.image:=nil;
+       Map_IMG.image:=Copymap.makecopy; //BUG: Don't I leave memory leaks here?
+       freeandnil(copymap);
+     end;
+     //Check if Rose is found
+     if visible_changed then
+     if (not RoseFound) and (not show_map_boolean) then
+       if vis[rosex,rosey,rosez] then begin
+         RoseFound:=true;
+         //if yes, then show the label
+         RoseLabel:=TCastleLabel.create(Window);
+         RoseLabel.Left:=window.width div 2-200;
+         RoseLabel.bottom:=window.height-100;
+         RoseLabel.text.text:='CONGRATULATIONS!!! You have found the rose!';
+         Window.Controls.InsertFront(RoseLabel);
+       end;
+
+     //show % explored
+     if visible_changed then begin
+       ix:=round(Explored_Area/MapArea*100);
+       if (ix=100) and (explored_Area<MapArea) then ix:=99;
+       Explored_Label.text.text:='Explored: '+inttostr(ix)+'%';
+     end;
+
+     //show player location
+     Player_IMG.left:=Map_IMG.left+round(((Player.position[0]/myscale/2-0.5))*16-3);//Map_IMG.left+Map_IMG.width-;
+     Player_IMG.bottom:=Map_IMG.bottom+round((maxy-(-Player.position[1]/myscale/2-0.5))*16-3);//Map_IMG.bottom-Map_IMG.height+round(*16);
+
+
+     oldz:=pz;
+    end else
+    //this shows animated load screen (should be a 'velocity' somewhere);
+    if gamemode=gamemode_loadscreen then begin
+      if loadscreen_IMG=nil then begin
+        if loadscreentime=-1 then loadscreentime:=now;
+        loadscreen_IMG:=TCastleImageControl.create(Window);
+        case random(5) of
+          0:loadscreen_IMG.image:=LoadIMage(loadscreen_folder+'lovely-image_CC0_by_Sharon_Apted.jpg', [TRGBAlphaImage]) as TRGBAlphaImage;
+          1:loadscreen_IMG.image:=LoadIMage(loadscreen_folder+'fractal-in-green-1305526660FTL_CC0_by_Sharon_Apted+.jpg', [TRGBAlphaImage]) as TRGBAlphaImage;
+          2:loadscreen_IMG.image:=LoadIMage(loadscreen_folder+'red-centred-fractal_CC0_by_Sharon_Apted+.jpg', [TRGBAlphaImage]) as TRGBAlphaImage;
+          else loadscreen_IMG.image:=LoadIMage(loadscreen_folder+'Mosaic_Rose_CC0_by_Piotr_Siedlecki+.jpg', [TRGBAlphaImage]) as TRGBAlphaImage;
+        end;
+        loadscreen_IMG.Image.Resize(round(loadscreen_img.image.Width/loadscreen_img.image.height*window.Height), window.Height,  riBilinear);
+        loadscreen_IMG.left:=0;
+        loadscreen_IMG.bottom:=0;
+        Window.Controls.InsertFront(loadscreen_IMG);
+        loadscreen_label:=TCastleLabel.create(Window);
+        loadscreen_label.Left:=window.width;
+        loadscreen_label.bottom:=round(window.Height * sqr(1-0.61));
+        loadscreen_label.text.text:='Welcome to MAZER :)';
+        loadscreen_label.text.Add('Generating... Please, wait...');
+        Window.Controls.InsertFront(loadscreen_label);
+      end;
+      loadscreen_IMG.Left:=round((now-loadscreentime)*24*60*60*loadscreenanimationspeed);
+      loadscreen_label.Left:=window.width-length(loadscreen_label.Text.text)*12 div 2-round((now-loadscreentime)*24*60*60*loadscreenanimationspeed);
+      if (Loadscreen_IMG.Left>=window.width-loadscreen_IMG.image.width) then begin
+        window.Controls.Remove(loadscreen_img);
+        window.Controls.Remove(loadscreen_label);
+        freeandnil(loadscreen_IMG);
+        freeandnil(loadscreen_label);
+        loadscreentime:=now;
+      end;
+    end else
+    if gamemode=gamemode_loadscreen_init then begin
+      gamemode:=gamemode_loadscreen;
+      GenerationThread:=TGenerationThread.Create(true);
+      GenerationThread.FreeOnTerminate:=true;
+      GenerationThread.Priority:=tpLower;
+      writeln('Thread started...');
+//      GenerationThread.Resume;
+      GenerationThread.Start;
+    end;
+end;
+
+{----- this thread will initialize the interface and generate the map --------}
+
+procedure TGenerationThread.execute;
+begin
+ writeln('Loading tiles...');
+ LoadTiles;    //read all tiles from the file
+ writeln('Generating Map...');
+ GenerateMap;  //generate the map;
+
+ //final initializations
+ window.Controls.Remove(loadscreen_img);
+ window.Controls.Remove(loadscreen_label);
+ Window.scenemanager.camera:=player.camera;
+
+ GameMode:=GameMode_game;
+end;
+
+{---------------}
+
+var MyMusicTimer:TDateTime;
+    MusicReady:boolean;
+procedure TMusicLoadThread.execute;
+var nextmusic:integer;
+    music_name:string;
+begin
+ //select the track and keep it different from the current one
+ writeln('Starting music thread... ');
+ repeat
+   nextmusic:=trunc(random*6)+1;
+   if nextmusic=0 then nextmusic:=1;
+   if nextmusic>6 then nextmusic:=6;
+ until nextmusic<>oldmusic;
+ //load the track
+ case nextmusic of
+     1: music_name:='Cleyton_RX_Underwater_CC-BY_by_Doppelganger.ogg';
+     2: music_name:='Crystal_cave_Mixdown_CC-BY_by_cynicmusic.ogg';
+     3: music_name:='Lurid_Delusion_CC-BY_by_Matthew_Pablo.ogg';
+     4: music_name:='Mysterious_Ambience_Mixdown_CC-BY_by_cynicmusic.ogg';
+     5: music_name:='Mystic_theme_CC-BY_by_Alexandr_Zhelanov.ogg';
+    else music_name:='Organ_Mixdown_CC-BY-SA_by_Devon_Baumgarten.ogg';
  end;
- if lasttime<0 then  lasttime:=now;
+ //start music
+ writeln('soundengine.loadbuffer ',music_name);
+ music:=soundengine.loadbuffer(music_folder+music_name,music_duration);
+ writeln('SoundEngine.PlaySound (outside the trhead)',music_name);
+ //and finish
+ oldmusic:=nextmusic;
+ MyMusicTimer:=now;
+ MusicReady:=true;
+end;
 
- //get player location
- px:=round(-(Player.position[0])/myscale/2);
- if px<1 then px:=1;
- if px>maxx then px:=maxx;
- py:=round(-(Player.position[2])/myscale/2);
- if py<1 then py:=1;
- if py>maxy then py:=maxy;
- pz:=round(-(Player.position[1]-1)/myscale/2);
- if pz<1 then pz:=1;
- if pz>maxz then pz:=maxz;
- set_vis(px,py,pz);
- if (map[px,py,pz].faces[angle_left]<>face_wall) then set_vis(px-1,py,pz);
- if (map[px,py,pz].faces[angle_right]<>face_wall) then set_vis(px+1,py,pz);
- if (map[px,py,pz].faces[angle_top]<>face_wall) then set_vis(px,py-1,pz);
- if (map[px,py,pz].faces[angle_bottom]<>face_wall) then set_vis(px,py+1,pz);
+procedure do_music;
+begin
+ if (MyMusicTimer>0) and ((now-MyMusicTimer)*60*60*24>music_duration+1) then MyMusicTimer:=-1;
 
- //show the minimap
- if (oldz<>pz) or (visible_changed) then begin
-   Copymap:=LoadImage(Models_Folder+'0.png', [TRGBAlphaImage]) as TRGBAlphaImage;       //BUG: it's the only way I could initialize TCastleImage...????????
-   Copymap.setsize((maxx)*16,(maxy)*16,1);
-   for ix:=1 to maxx do
-    for iy:=1 to maxy do
-     if vis[ix,iy,pz] then
-       copymap.drawFrom(minimap[pz],(ix-1)*16,(maxy-iy)*16,(ix-1)*16,(maxy-iy)*16,16,16)
-     else
-       copymap.drawFrom(zero_png,(ix-1)*16,(maxy-iy)*16,0,0,16,16);
-   Map_IMG.left:=Window.width-Map_Img.image.width;
-   map_img.bottom:=0;//Map_Img.image.height;
-   Map_IMG.image:=nil;
-   Map_IMG.image:=Copymap.makecopy;
-   freeandnil(copymap);
+ //if no initialized music then do a new one.
+ if (MyMusicTimer=-1) and play_music then begin
+   begin
+     //init 'no music' to prevent another one from starting until this one is ready
+     MyMusicTimer:=now;
+     Music_duration:=10000;
+     writeln('Starting music... ');
+     //launching music through a thread to avoid lags both in music and gameplay
+     MusicLoadThread:=TMusicLoadThread.Create(true);
+     MusicLoadThread.FreeOnTerminate:=true;
+     MusicLoadThread.Priority:=tpLower;
+     MusicLoadThread.Start;
+   end
  end;
- //Check if Rose is found
- if visible_changed then
- if (not RoseFound) and (not show_map_boolean) then
-   if vis[rosex,rosey,rosez] then begin
-     RoseFound:=true;
-     RoseLabel:=TCastleLabel.create(Window);
-     RoseLabel.Left:=window.width div 2-200;
-     RoseLabel.bottom:=window.height-100;
-     RoseLabel.text.text:='CONGRATULATIONS!!! You have found the rose!';
-     Window.Controls.InsertFront(RoseLabel);
-   end;
-
- if visible_changed then
-   Explored_Label.text.text:='Explored: '+inttostr(round(Explored_Area/MapArea*100))+'%';
+end;
 
 
- //show player location
- Player_IMG.left:=Map_IMG.left+round(((-Player.position[0]/myscale/2-0.5))*16-3);//Map_IMG.left+Map_IMG.width-;
- Player_IMG.bottom:=Map_IMG.bottom+round((maxy-(-Player.position[2]/myscale/2-0.5))*16-3);//Map_IMG.bottom-Map_IMG.height+round(*16);
+procedure do_timer;
+begin
+  if play_music then do_music; //each ontimer ms check if new music should be played - it's ugly, but I'll fix that one later, much later
+  //I load music in a thread but start playing it outside the thread to avoid some stupid SIGSEGV... maybe SoundEngine.PlaySound cannot run in a thread?
+  if MusicReady then begin
+    SoundEngine.PlaySound(music, false, false, 0, 1, 0, 1, ZeroVector3Single);
+    writeln('SoundEngine.PlaySound done');
+    MusicReady:=false;
+  end;
 
-
- oldz:=pz;
+  if gamemode=gamemode_loadscreen then window.DoRender;
+  if gamemode=gamemode_game then application.TimerMilisec:=1000; //reset timer back to 1s in-game, it was 60fps for loading screen
 end;
 
 {==========================================================================}
 {================================= MAIN ===================================}
 {==========================================================================}
-Var i:integer;
+//Var i,j:integer;
 begin
-  maxx:=maxmaxx;
-  maxy:=maxmaxy;
-  maxz:=maxmaxz;
+  writeln('Starting...');
   Window := TCastleWindow.Create(Application);
-  //window.doublebuffer:=true;
 
+  if play_music then begin
+    //prepare music
+    //music seems to be rather heavy on FPS... :(
+    SoundEngine.ParseParameters;             //start castle sound engine
+    SoundEngine.MinAllocatedSources := 1;
+    oldmusic:=-1;
+    MyMusicTimer:=-1;
+    MusicReady:=false; {non-initialized}
+  end;
+
+  gamemode:=gamemode_loadscreen_init;
+
+  //label for FPS dislpay
   Label_fps:=TCastleLabel.create(Window);
   label_fps.Left:=0;
   label_fps.bottom:=0;
   Label_fps.text.text:='-';
-  Window.Controls.InsertFront(Label_fps);
 
+  //label for % explored display
   Explored_label:=TCastleLabel.create(Window);
   Explored_label.Left:=100;
   Explored_label.bottom:=0;
   Explored_label.text.text:='0%';
-  Window.Controls.InsertFront(Explored_label);
 
-  Zero_png:=LoadIMage(Models_folder+'0.png', [TRGBAlphaImage]) as TRGBAlphaImage;
+  //label to display tile info (debug)
+  Tile_label:=TCastleLabel.create(Window);
+  Tile_label.Left:=300;
+  Tile_label.bottom:=0;
+  Tile_label.text.text:='-';
 
+  //a transparent 16x16 image, I use it sometimes (bug?).
+  Zero_png:=LoadIMage(etc_Models_folder+'0.png', [TRGBAlphaImage]) as TRGBAlphaImage;
+
+  //this is a minimap image
   Map_Img:=TCastleImageControl.create(Window);
-  Map_IMG.image:=LoadIMage(Models_folder+'0.png', [TRGBAlphaImage]) as TRGBAlphaImage;
+  Map_IMG.image:=zero_png.MakeCopy; //TODO: don't I leave memory leaks here?
   Map_IMG.image.setsize((maxx)*16-1,(maxy)*16-1,1);
-  //Map_IMG.image.clear(Vector4single(0,0,0,0));  // NOT WORKING???
-  Window.Controls.InsertFront(Map_IMG);
 
+  //this image will display the player location
   Player_IMG:=TCastleImageControl.create(Window);
-  Player_IMG.image:=LoadIMage(Models_Folder+'player.png', [TRGBAlphaImage]) as TRGBAlphaImage;
+  Player_IMG.image:=LoadIMage(etc_Models_Folder+'player.png', [TRGBAlphaImage]) as TRGBAlphaImage;
   Player_IMG.left:=0;
   Player_IMG.bottom:=0;
-  Window.Controls.InsertFront(Player_IMG);
 
-  LoadTiles;
-  GenerateMap;
-
+  //set the player properties.
   Player := TPlayer.Create(Window.SceneManager);
   Window.SceneManager.Items.Add(Player);
   Window.SceneManager.Player := Player;
   player.Camera.MouseLook:=true;
+  Player.Camera.GravityUp:=Vector3Single(0,0,1);
+  Player.Up:=Vector3Single(0,0,1);
+//  Player.Camera.Direction:=Vector3Single(0,1,0);
+//  Player.SetView(Vector3Single(0,-1,0),Vector3Single(0,0,1),true);
   player.DefaultPreferredHeight:=1;
   player.DefaultMoveHorizontalSpeed:=3;
   player.Camera.MouseLookHorizontalSensitivity:=0.5;
   player.Camera.MouseLookVerticalSensitivity:=0.5;
-  player.position:=Vector3Single(-2*myscale*(maxx div 2),-2*myscale+(player.DefaultPreferredHeight),-2*myscale*(maxy div 2));
-//  player.FallingEffect:=false;
-  Window.scenemanager.camera:=player.camera;
+  player.position:=Vector3Single(2*myscale*(maxx div 2),-2*myscale*(maxy div 2),-2*myscale+(player.DefaultPreferredHeight));
+  player.FallingEffect:=false;
+  player.HeadBobbing:=0.03;
+  player.Camera.HeadBobbingTime:=0.5;
+  PlayerTile:=-1;
+  PlayerTileOld:=-1;
 
+  //footsteps_sound:=soundengine.loadbuffer(sound_folder+'footsteps.wav');
+  //stPlayerFootstepsDefault:=0;//SoundEngine.SoundFromName('footsteps.wav',true);
+
+  //initialize CastleWindow
   Window.OnUpdate:=@Update;
-  Window.ShadowVolumes := true;
-  Window.StencilBits := 8;
+  firstRender:=true; //just let the render know, if it's the first time rendering to properly initialize a few variables;
+  window.OnBeforeRender:=@ChunkManager; //this one manages chunks (loads and unlads them)
+  Window.ShadowVolumes := Shadow_volumes_enabled;  {?????}
+  Window.ShadowVolumesRender:=Shadow_volumes_enabled; {?????????}
+  Window.StencilBits := 8;     {?????????}
+  window.FullScreen:=false;
+  //window.doublebuffer:=true;
+
+  application.TimerMilisec:=1000 div 60{1000 div loadscreenanimationspeed div 3}; //60 fps for loadscreen
+  application.OnTimer:=@do_timer;
+
+  {=== this will start the game ===}
   Window.Open;
   Application.Run;
+  {=== ........................ ===}
 
-  for i:=1 to maxTilesTypes do freeandnil(Tiles[i].Tile_PNG);
+  writeln('freeing all ...');
+  //free everything unneeded.
+{  for i:=1 to maxTilesTypes do
+   for j:=1 to maxtilesizez do if Tiles[i].Tile_PNG[j]<>nil then freeandnil(Tiles[i].Tile_PNG[j]);}
+  writeln('ending...')
 end.
 

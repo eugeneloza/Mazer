@@ -1,4 +1,4 @@
-{Copyright (C) 2015 Yevhen Loza
+{Copyright (C) 2015-2016 Yevhen Loza
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -13,6 +13,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.}
 
+//this unit gives some very generic variables & constants that are used across other uinits.
+
 unit generic_var;
 
 {$mode objfpc}{$H+}
@@ -23,19 +25,45 @@ uses
   Classes, SysUtils,
   CastleWindow;
 
-const maxmaxx=10;
-      maxmaxy=10;
+const anisotropic_smoothing=4;        //rendering parameters for easy access
+      Normal_map_enabled=false;
+      Shadow_maps_enabled=false;
+      Shadow_volumes_enabled=false;
+
+const maxmaxx=17;                      //max map size
+      maxmaxy=17;
       maxmaxz=4;
-      maxMapTiles=maxmaxx*maxmaxy*maxmaxz;
+      maxMapTiles=maxmaxx*maxmaxy*maxmaxz;      //map volume
+      maxMapPlaceholders=MaxMapTiles*30;
 
-      const Target_Map_Area=maxmaxx*maxmaxy*maxmaxz div 2;
+const maxMaxPlaceholdersTypes=100;     //for static arrays size
+      MaxMaxPlaceholderAtlasRecords=100;
+      MaxMaxTilesTypes=100;            //tiles variants
 
+const Target_Map_Area=maxmaxx*maxmaxy*maxmaxz div 20;
 
-      myscale =1;
+const base_models_folder='DAT'+pathdelim+'models'+pathdelim;
+      tiles_models_folder=base_models_folder+'tiles'+pathdelim;
+      items_models_folder=base_models_folder+'items'+pathdelim;
+      placeholders_models_folder=base_models_folder+'placeholders'+pathdelim;
+      etc_models_folder=base_models_folder+'etc'+pathdelim;
+      //maps_folder='DAT'+pathdelim+'maps'+pathdelim;
+      loadscreen_folder='DAT'+pathdelim+'loadscreen'+pathdelim;
+      music_folder='DAT'+pathdelim+'music'+pathdelim;
+      sound_folder='DAT'+pathdelim+'sound'+pathdelim;
 
-const models_folder='DAT'+pathdelim+'models'+pathdelim;
+const gamemode_loadscreen_init=100;
+      gamemode_loadscreen=99;
+      gamemode_game=1;
+
+type shortstr=string[255]; //ansi string
 
 var Window: TCastleWindow;
+    myscale: single = 1.5;
+    maxx:integer=maxmaxx;
+    maxy:integer=maxmaxy;
+    maxz:integer=maxmaxz;
+    //currentMap:string='default';
 
 implementation
 

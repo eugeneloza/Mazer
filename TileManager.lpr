@@ -7,8 +7,8 @@ uses
   cthreads,
   {$ENDIF}{$ENDIF}
   Interfaces, // this includes the LCL widgetset
-  Forms, TileManager_unit, generic_var, tile_var, castle_base, castle_components
-  { you can add units after this };
+  Forms, TileManager_unit, generic_var, tile_var, castle_base,
+  castle_components;
 
 {$R *.res}
 
