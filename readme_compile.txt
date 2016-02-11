@@ -1,9 +1,9 @@
 You can compile the source simply by opening *.lpr in Lazarus IDE and pushing F9 to complie&run.
 
-Testing version will require Castle Game Engine at least 5.2.0 version to compile. Download and installation instructions may be found here http://castle-engine.sourceforge.net/engine.php
+This version requires latest Castle Game Engine version to compile. Download and installation instructions may be found here http://castle-engine.sourceforge.net/engine.php
 
 Linux version requires 32bit GTK+2 (Thanks Akien for the information).
-Testing version also requires (Debian/Ubuntu package reference):
+(Debian/Ubuntu package reference):
 libopenal1
 libopenal-dev
 libpng
