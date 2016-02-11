@@ -8,8 +8,8 @@
       <Unit0>
         <Filename Value="Mazer.pas"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="92"/>
-        <CursorPos X="28" Y="101"/>
+        <TopLine Value="167"/>
+        <CursorPos X="29" Y="183"/>
         <UsageCount Value="202"/>
         <Loaded Value="True"/>
       </Unit0>
@@ -18,8 +18,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Tile_var"/>
         <EditorIndex Value="2"/>
-        <TopLine Value="394"/>
-        <CursorPos X="14" Y="396"/>
+        <TopLine Value="274"/>
+        <CursorPos X="55" Y="282"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit1>
@@ -28,8 +28,8 @@
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="4"/>
-        <TopLine Value="32"/>
-        <CursorPos X="53" Y="43"/>
+        <TopLine Value="29"/>
+        <CursorPos X="24" Y="36"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit2>
@@ -38,8 +38,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Generator"/>
         <EditorIndex Value="3"/>
-        <TopLine Value="210"/>
-        <CursorPos X="38" Y="221"/>
+        <TopLine Value="552"/>
+        <CursorPos X="37" Y="558"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit3>
@@ -48,9 +48,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="MazerMapParser"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="151"/>
-        <CursorPos X="35" Y="193"/>
-        <UsageCount Value="99"/>
+        <UsageCount Value="112"/>
         <Loaded Value="True"/>
       </Unit4>
       <Unit5>
@@ -58,46 +56,46 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="2176"/>
         <CursorPos Y="2186"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit5>
       <Unit6>
         <Filename Value="m_unit.pas"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="12"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit6>
       <Unit7>
         <Filename Value="V:\castle_game_engine-5.2.0\src\images\castleimages.pas"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="2132"/>
         <CursorPos X="16" Y="2140"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit7>
       <Unit8>
         <Filename Value="V:\castle_game_engine-5.2.0\src\x3d\opengl\castlescene.pas"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="59"/>
         <CursorPos X="3" Y="35"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit8>
       <Unit9>
         <Filename Value="V:\castle-engine\src\x3d\x3dlexer.pas"/>
         <EditorIndex Value="-1"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit9>
       <Unit10>
         <Filename Value="V:\castle-engine\src\images\castleimages.pas"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="259"/>
         <CursorPos X="5" Y="265"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit10>
       <Unit11>
         <Filename Value="V:\home\eugene\castle_game_engine\src\x3d\x3d_grouping.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="481"/>
         <CursorPos X="46" Y="490"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit11>
       <Unit12>
         <Filename Value="V:\castle-engine\src\x3d\castlescenecore.pas"/>
@@ -105,14 +103,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="272"/>
         <CursorPos X="3" Y="282"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit12>
       <Unit13>
         <Filename Value="V:\castle-engine\src\x3d\x3d_lighting.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="295"/>
         <CursorPos X="3" Y="304"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit13>
       <Unit14>
         <Filename Value="V:\castle-engine\src\x3d\opengl\castlescenemanager.pas"/>
@@ -120,7 +118,7 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="701"/>
         <CursorPos X="5" Y="696"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit14>
       <Unit15>
         <Filename Value="V:\castle-engine\src\game\castleplayer.pas"/>
@@ -128,14 +126,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="200"/>
         <CursorPos X="3" Y="86"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit15>
       <Unit16>
         <Filename Value="V:\castle-engine\src\x3d\x3dnodes_node.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="1224"/>
         <CursorPos Y="1233"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit16>
       <Unit17>
         <Filename Value="V:\CGE\castle-engine\src\images\castleimages.pas"/>
@@ -143,21 +141,21 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="235"/>
         <CursorPos X="12" Y="244"/>
-        <UsageCount Value="4"/>
+        <UsageCount Value="3"/>
       </Unit17>
       <Unit18>
         <Filename Value="V:\CGE\castle-engine\src\base\castleutils_math.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="454"/>
         <CursorPos X="17" Y="461"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit18>
       <Unit19>
         <Filename Value="V:\CGE\castle-engine\src\images\castleimages_draw.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="169"/>
         <CursorPos Y="176"/>
-        <UsageCount Value="5"/>
+        <UsageCount Value="4"/>
       </Unit19>
       <Unit20>
         <Filename Value="V:\CGE\castle-engine\src\ui\opengl\castlecontrols.pas"/>
@@ -165,7 +163,7 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="1885"/>
         <CursorPos Y="1894"/>
-        <UsageCount Value="3"/>
+        <UsageCount Value="2"/>
       </Unit20>
       <Unit21>
         <Filename Value="V:\CGE\castle-engine\src\ui\castleuicontrols.pas"/>
@@ -173,14 +171,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="3056"/>
         <CursorPos Y="3066"/>
-        <UsageCount Value="4"/>
+        <UsageCount Value="3"/>
       </Unit21>
       <Unit22>
         <Filename Value="V:\CGE\castle-engine\src\x3d\x3dnodes_node.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="2730"/>
         <CursorPos Y="2740"/>
-        <UsageCount Value="4"/>
+        <UsageCount Value="3"/>
       </Unit22>
       <Unit23>
         <Filename Value="V:\CGE\castle-engine\src\3d\castle3d.pas"/>
@@ -188,14 +186,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="3789"/>
         <CursorPos Y="3784"/>
-        <UsageCount Value="4"/>
+        <UsageCount Value="3"/>
       </Unit23>
       <Unit24>
         <Filename Value="V:\CGE\castle-engine\src\opengl\castleglimages_load_2d.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="329"/>
         <CursorPos X="35" Y="335"/>
-        <UsageCount Value="4"/>
+        <UsageCount Value="3"/>
       </Unit24>
       <Unit25>
         <Filename Value="V:\CGE\castle-engine\src\audio\castlealutils.pas"/>
@@ -203,128 +201,130 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="233"/>
         <CursorPos Y="203"/>
-        <UsageCount Value="5"/>
+        <UsageCount Value="4"/>
       </Unit25>
       <Unit26>
         <Filename Value="..\Mazer3_160126-113\generator.pas"/>
         <UnitName Value="Generator"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="55"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="7"/>
       </Unit26>
     </Units>
     <JumpHistory Count="29" HistoryIndex="28">
       <Position1>
         <Filename Value="generator.pas"/>
-        <Caret Line="66" Column="21" TopLine="50"/>
+        <Caret Line="542" Column="81" TopLine="419"/>
       </Position1>
       <Position2>
         <Filename Value="generator.pas"/>
-        <Caret Line="67" Column="9" TopLine="51"/>
       </Position2>
       <Position3>
         <Filename Value="generator.pas"/>
-        <Caret Line="321" Column="111" TopLine="305"/>
+        <Caret Line="588" Column="25" TopLine="583"/>
       </Position3>
       <Position4>
         <Filename Value="generator.pas"/>
-        <Caret Line="328" Column="34" TopLine="312"/>
+        <Caret Line="640" Column="27" TopLine="630"/>
       </Position4>
       <Position5>
         <Filename Value="generator.pas"/>
-        <Caret Line="370" Column="7" TopLine="367"/>
+        <Caret Line="668" Column="29" TopLine="660"/>
       </Position5>
       <Position6>
         <Filename Value="generator.pas"/>
-        <Caret Line="371" Column="7" TopLine="367"/>
       </Position6>
       <Position7>
         <Filename Value="generator.pas"/>
-        <Caret Line="372" Column="7" TopLine="367"/>
+        <Caret Line="43" Column="60" TopLine="30"/>
       </Position7>
       <Position8>
         <Filename Value="generator.pas"/>
-        <Caret Line="375" Column="7" TopLine="367"/>
+        <Caret Line="666" Column="27" TopLine="656"/>
       </Position8>
       <Position9>
         <Filename Value="generator.pas"/>
-        <Caret Line="376" Column="7" TopLine="367"/>
+        <Caret Line="674" Column="31" TopLine="662"/>
       </Position9>
       <Position10>
         <Filename Value="generator.pas"/>
-        <Caret Line="377" Column="7" TopLine="367"/>
+        <Caret Line="636" Column="34" TopLine="632"/>
       </Position10>
       <Position11>
         <Filename Value="generator.pas"/>
-        <Caret Line="742" Column="178" TopLine="729"/>
+        <Caret Line="554" Column="79" TopLine="546"/>
       </Position11>
       <Position12>
-        <Filename Value="tile_var.pas"/>
-        <Caret Line="358" Column="18" TopLine="355"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="52" Column="52" TopLine="40"/>
       </Position12>
       <Position13>
-        <Filename Value="tile_var.pas"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="558" Column="3" TopLine="547"/>
       </Position13>
       <Position14>
-        <Filename Value="tile_var.pas"/>
-        <Caret Line="171" Column="29" TopLine="161"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="53" TopLine="46"/>
       </Position14>
       <Position15>
-        <Filename Value="tile_var.pas"/>
-        <Caret Line="188" Column="50" TopLine="173"/>
+        <Filename Value="Mazer.pas"/>
+        <Caret Line="136" Column="87" TopLine="124"/>
       </Position15>
       <Position16>
-        <Filename Value="tile_var.pas"/>
-        <Caret Line="189" Column="57" TopLine="174"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="532" Column="31" TopLine="527"/>
       </Position16>
       <Position17>
-        <Filename Value="tile_var.pas"/>
-        <Caret Line="192" Column="54" TopLine="177"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="52" Column="42" TopLine="49"/>
       </Position17>
       <Position18>
-        <Filename Value="generator.pas"/>
-        <Caret Line="605" Column="24" TopLine="601"/>
+        <Filename Value="Mazer.pas"/>
+        <Caret Line="179" Column="37" TopLine="167"/>
       </Position18>
       <Position19>
-        <Filename Value="generator.pas"/>
+        <Filename Value="Mazer.pas"/>
+        <Caret Line="178" Column="61" TopLine="166"/>
       </Position19>
       <Position20>
-        <Filename Value="generator.pas"/>
-        <Caret Line="53" Column="13" TopLine="39"/>
+        <Filename Value="Mazer.pas"/>
+        <Caret Line="32" Column="35" TopLine="22"/>
       </Position20>
       <Position21>
-        <Filename Value="generator.pas"/>
-        <Caret Line="670" Column="33" TopLine="509"/>
+        <Filename Value="Mazer.pas"/>
+        <Caret Line="34" Column="41" TopLine="22"/>
       </Position21>
       <Position22>
-        <Filename Value="generator.pas"/>
+        <Filename Value="Mazer.pas"/>
+        <Caret Line="179" TopLine="167"/>
       </Position22>
       <Position23>
         <Filename Value="generator.pas"/>
-        <Caret Line="50" Column="10" TopLine="34"/>
+        <Caret Line="563" Column="41" TopLine="548"/>
       </Position23>
       <Position24>
-        <Filename Value="generator.pas"/>
-        <Caret Line="454" Column="21" TopLine="447"/>
+        <Filename Value="Mazer.pas"/>
+        <Caret Line="179" Column="131" TopLine="167"/>
       </Position24>
       <Position25>
-        <Filename Value="Mazer.pas"/>
-        <Caret Line="104" Column="68" TopLine="95"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="52" Column="59" TopLine="36"/>
       </Position25>
       <Position26>
-        <Filename Value="Mazer.pas"/>
-        <Caret Line="109" Column="45" TopLine="101"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="554" Column="19" TopLine="539"/>
       </Position26>
       <Position27>
-        <Filename Value="Mazer.pas"/>
+        <Filename Value="generator.pas"/>
+        <Caret Line="558" Column="37" TopLine="552"/>
       </Position27>
       <Position28>
-        <Filename Value="Mazer.pas"/>
-        <Caret Line="176" TopLine="168"/>
+        <Filename Value="tile_var.pas"/>
+        <Caret Line="284" Column="35" TopLine="274"/>
       </Position28>
       <Position29>
-        <Filename Value="generator.pas"/>
-        <Caret Line="536" Column="30" TopLine="529"/>
+        <Filename Value="generic_var.pas"/>
+        <Caret Line="41" Column="26" TopLine="29"/>
       </Position29>
     </JumpHistory>
   </ProjectSession>

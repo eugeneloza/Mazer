@@ -538,7 +538,7 @@ procedure TForm1.resetCamera;
 begin
  if (CastleControl1.scenemanager.camera<>nil) and (myTile.Tile.Tile3D<>nil) then begin
    //set upthe camera
-   CastleControl1.scenemanager.camera.setView(MyTile.Tile_Scene.BoundingBox.middle+Vector3Single(0,MyTile.Tile_Scene.BoundingBox.maxsize+1,0),Vector3Single(0,-1,0),Vector3Single(0,0,1));
+   CastleControl1.scenemanager.camera.setView(MyTile.Tile_Scene.BoundingBox.middle+Vector3Single(0,0,MyTile.Tile_Scene.BoundingBox.maxsize+1),Vector3Single(0,0,-1),Vector3Single(0,1,0));
   //  CastleControl1.scenemanager.camera.ProjectionMatrix:=OrthoProjection(-1, 1, -1, 1, 0.1, 100);//OrthogonalProjection;
    CastleControl1.scenemanager.camera.input:=TCamera.DefaultInput;
    CastleControl1.update;
@@ -658,8 +658,8 @@ begin
   //  if no tilemap to load
   If not TileMapLoaded then begin
     MyTile.Tile.TileSizex:=round(MyTile.Tile_Scene.BoundingBox.sizex/2);
-    MyTile.Tile.TileSizey:=round(MyTile.Tile_Scene.BoundingBox.sizez/2{+0.5}); //whhyyyyyyyy it falied at 1 of ~150 tiles ?????
-    MyTile.Tile.TileSizez:=round(MyTile.Tile_Scene.BoundingBox.sizey/2);
+    MyTile.Tile.TileSizey:=round(MyTile.Tile_Scene.BoundingBox.sizey/2{+0.5}); //whhyyyyyyyy it falied at 1 of ~150 tiles ?????
+    MyTile.Tile.TileSizez:=round(MyTile.Tile_Scene.BoundingBox.sizez/2);
     //not optimal search for blockers.
     MyTile.Tile.blocker:=false;
 

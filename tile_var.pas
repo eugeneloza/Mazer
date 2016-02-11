@@ -62,7 +62,7 @@ type Basic_Tile_type = record
   floor:array[1..2] of byte; // at this moment each tile has top and bottom only
 end;
 
-const maxtilesize = 10;   {max tile size (square tiles)}
+const maxtilesize = 3;   {max tile size (square tiles)}
       maxtilesizez = 3;   {max tile height}
 type Map_Tile_type = record
   Tile3D: TX3DRootNode;

@@ -31,6 +31,8 @@ const show_map_boolean=false;
 const play_music=true;
 const loadscreenanimationspeed=12;
 
+const const_FPS_goal=70; //dynamic goal for FPS.
+
 //this thread will generate the map in the background
 type TGenerationThread = class(TThread)
   private
@@ -49,7 +51,6 @@ var
   px,py,pz,oldz: integer;
 
   Player:TPlayer;
-  PlayerTile,PlayerTileOld:integer;
   firstRender:boolean;
 
   Label_FPS,explored_label,Tile_label:TCastleLabel;
@@ -62,7 +63,7 @@ var
   music_duration: TFloatTime;
   oldmusic:integer;
   MusicLoadThread:TMusicLoadThread; //thread to load music in background to avoid lags
-  footsteps_sound:TSoundBuffer;
+  //footsteps_sound:TSoundBuffer;
 
   gamemode:integer;
   loadscreen_img: TCastleImageControl;
@@ -100,9 +101,12 @@ Later we'll make some LODs here also.
 At this moment it just grabs current level the player is on and one level above and one below.
 Produces glitches and very inefficient, but easy-to-do and better-than-nothing.
 }
-var Ptile,POtile:integer;
+var p0x:integer=-1;
+    p0y:integer=-1;
+    p0z:integer=-1;
 procedure ChunkManager(Container: TUIContainer);
 var i,px,py,pz:integer;
+    activeTiles,LODtiles:integer;
 begin
  // temporary plug to raise FPS a little
  // I just switch off all tiles with z - player z greater than 1
@@ -119,37 +123,28 @@ begin
    pz:=round(-(Player.position[2]-1)/myscale/2);
    if pz<1 then pz:=1;
    if pz>maxz then pz:=maxz;
-   Ptile:=MapTileIndex[px,py,pz];
-   if (Ptile<>POtile) then begin
+   if (p0x<>px) or (p0y<>py) or (p0z<>pz) then begin
+      activeTiles:=0;
+      LODTiles:=0;
       for i:=1 to n_tiles do
-       if abs(generatorSteps[i].tz-pz)<=1 then
-        MapSwitches[i].WhichChoice:=0 else MapSwitches[i].WhichChoice:=-1;
+       if Neighbours[px,py,pz][i]<=Neighbours_limit div 10 then MapSwitches[i].WhichChoice:=-1 else
+       if Neighbours[px,py,pz][i]>Neighbours_limit then begin
+         MapSwitches[i].WhichChoice:=0;
+         inc(activeTiles);
+       end else begin
+         MapSwitches[i].WhichChoice:=1;
+         inc(LODTiles);
+       end;
+      Tile_label.text.text:='Active tiles = '+inttostr(ActiveTiles)+' + '+inttostr(LODTiles)+' n-lim:'+inttostr(Neighbours_limit);
+      //Tile_label.text.text:='current Neighbours_limit = '+inttostr(Neighbours_limit);
+      //Tile_label.text.text:='This Tile Weight Value = '+inttostr(Neighbours[px,py,pz][MapTileIndex[px,py,pz]]);
+{       if abs(generatorSteps[i].tz-pz)<=1 then
+        MapSwitches[i].WhichChoice:=0 else MapSwitches[i].WhichChoice:=-1;}
+      p0x:=px;
+      p0y:=py;
+      p0z:=pz;
    end;
-   POtile:=Ptile;
  end;
-
- // !!!! WELL, PARCTICALLY THIS ONE DOES NOT WORK (yet)
-
-{ if (playerTile<>PlayerTileOld) and (not firstrender) then begin
-   Tile_label.text.text:=(Tiles[GeneratorSteps[PlayerTile].Tile_Type].TileName);
-   for i:=1 to n_tiles do begin
-    //boogy wooogy!!!!!!!!!!!!! FIX IT NOW!!!
-    if (Neighbours[PlayerTile,i]>0) and (MapLoaded[i]=0) then begin
-      //add this one to the visible chunk
-      mapLoaded[i]:=Neighbours[PlayerTile,i];
-      //MapTiles[i].FdRender.Value:=true;
-      //MainRoot.FdChildren.replace(i-1,MapTiles[i]);
-    end else
-    if (Neighbours[PlayerTile,i]=0) and (MapLoaded[i]>0) then begin
-      //remove unnecessary chunks
-      mapLoaded[i]:=0;
-      //MapTiles[i].FdRender.Value:=false;
-      //writeln('node removed');
-      //MainRoot.FdChildren.replace(i-1,MapTiles[i]);
-    end;
-  end;
-  //MainScene.load(MainRoot,true);
- end;        }
 end;
 
 {************************************************************************}
@@ -172,6 +167,7 @@ end;
 procedure Update(Container: TUIContainer);
 var ix,iy:integer;
     copymap:TCastleImage;
+    PlayerTile:integer;
 begin
     if gamemode=gamemode_game then begin
 
@@ -180,6 +176,11 @@ begin
      inc(framecount);
      if (lasttime>0) and ((now-lasttime)>1/24/60/60) then begin
        label_FPS.text.text:=inttostr(framecount{round(1/(now-lasttime)/24/60/60)});
+       //here we dynamically adjust FPS in case it lags... not yet fine, but at least something
+       if (framecount<const_FPS_goal) then inc(Neighbours_limit,Neighbours_limit_max div 10 + 1) else
+       if (framecount>const_FPS_goal) then dec(Neighbours_limit,Neighbours_limit_max div 10 + 1);
+       if (Neighbours_limit>Neighbours_limit_max) then Neighbours_limit:=Neighbours_limit_max else
+       if (Neighbours_limit<Neighbours_limit_min) then Neighbours_limit:=Neighbours_limit_min;
        framecount:=0;
        lasttime:=now;
      end;
@@ -218,12 +219,8 @@ begin
      if (map[px,py,pz].floor[angle_stairs_up]<>floor_wall) then set_vis(px,py,pz-1);
      if (map[px,py,pz].floor[angle_stairs_down]<>floor_wall) then set_vis(px,py,pz+1);
 
-     PlayerTile:=MapTileIndex[px,py,pz];
-     if playertile>0 then Tile_label.text.text:=(Tiles[GeneratorSteps[PlayerTile].Tile_Type].TileName)+' : ('+inttostr(px)+','+inttostr(py)+','+inttostr(pz)+')';
-     if not firstrender then begin
-       playerTileOld:=PlayerTile;
-     end else
-       firstrender:=false;
+{     PlayerTile:=MapTileIndex[px,py,pz];
+     if playertile>0 then Tile_label.text.text:=(Tiles[GeneratorSteps[PlayerTile].Tile_Type].TileName)+' : ('+inttostr(px)+','+inttostr(py)+','+inttostr(pz)+')';}
 
      //show the minimap
      if (oldz<>pz) or (visible_changed) then begin
@@ -244,6 +241,8 @@ begin
        Map_IMG.image:=nil;
        Map_IMG.image:=Copymap.makecopy; //BUG: Don't I leave memory leaks here?
        freeandnil(copymap);
+
+       firstrender:=false;
      end;
      //Check if Rose is found
      if visible_changed then
@@ -470,8 +469,6 @@ begin
   player.FallingEffect:=false;
   player.HeadBobbing:=0.03;
   player.Camera.HeadBobbingTime:=0.5;
-  PlayerTile:=-1;
-  PlayerTileOld:=-1;
 
   //footsteps_sound:=soundengine.loadbuffer(sound_folder+'footsteps.wav');
   //stPlayerFootstepsDefault:=0;//SoundEngine.SoundFromName('footsteps.wav',true);

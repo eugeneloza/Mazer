@@ -20,14 +20,14 @@ FloorDn=1
 <1,2,1>
 Base=2
 FloorUp=1
-FloorDn=2
+FloorDn=1
 [0]2
 [1]1
 [2]2
 [3]1
 <1,2,2>
 Base=2
-FloorUp=2
+FloorUp=1
 FloorDn=1
 [0]1
 [1]2

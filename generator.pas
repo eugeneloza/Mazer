@@ -31,6 +31,8 @@ const allow_error=0.10; {target fail allow}
 const digit_accuracy=1e-6; //accuracy for single (7/8 digits accuracy) rounding-ups, yeah, its ugly, I know.
       //also have to keep track that random<digit_accuracy or 1-random<digit_accuracy will lead to a bug.
 
+const MaxLODs=2; // maximal number of LODs
+
 type Generator_type = record
   tile_type:integer;
   tx,ty,tz:integer;
@@ -40,15 +42,14 @@ type MapIntArray = array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of integer;
 
 var n_tiles:integer;
 
-    MapTiles: array[1..maxMapTiles] of TTransformNode;
-    MapSwitches: array[1..MaxMapTiles] of TSwitchNode;
-    MapTileState: array[1..maxMapTiles] of integer;
+    MapTiles: array[1..maxMapTiles] of array[1..MaxLODs] of TTransformNode;
     MapPlaceholders: array[1..maxMapPlaceholders] of TtransformNode;
     mapElements,mapPlaceholderElements:integer;
+    MapSwitches: array[1..MaxMapTiles] of TSwitchNode;   //switches contain all LODs
 
-    MapTileIndex:MapIntArray; //here we store all tiles numbers to cast them to TileNeigbours
-    Neighbours: array [1..maxMapTiles,1..maxMapTiles] of byte; //this stores all neigbours with all 'distance' relation for LODs
-    MapLoaded: array[1..maxMapTiles] of byte; //this is LOD state of tile loaded
+    MapTileIndex:MapIntArray; //here we store all tiles numbers at specific xyz; used to quicken search for neighbours + debug TileLabel in-game
+    Neighbours: array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of array [1..maxMapTiles] of integer; //this stores all neigbours with all 'distance' relation for LODs
+    Neighbours_limit,Neighbours_limit_max,Neighbours_limit_min: integer;    //used for LODs management
 
     MainRoot: TX3DRootNode;
     MainScene: TCastleScene;
@@ -429,114 +430,140 @@ end;
 
 {------------------------------------------------------------------------}
 
-//this block implements map chunks
-
-const SourceTile_code=1;
-      VisibleTile_code=2;
-      CandidateTile_code=3;
-
-var TmpMap:^MapIntArray;
-    CurrentJob:integer;
-    cx,cy,cz:integer;
-    candidate_initialized:boolean;
-
-procedure SetCandidate(atx,aty,atz:integer);
-begin
-  if TmpMap^[atx,aty,atz]=-1 then begin
-    tmpMap^[atx,aty,atz]:=CandidateTile_code;
-    cx:=atx;
-    cy:=aty;
-    cz:=atz;
-    candidate_Initialized:=true;
-  end;
-end;
-
-procedure AddToNeighbours(TileIndex:integer);
-var ix,iy,iz,x1,y1,z1:integer;
-begin
-{ neighbours[currentJob,TileIndex]:=1;
- with Tiles[GeneratorSteps[TileIndex].Tile_type] do begin
-   for ix:=1 to tilesizex do
-    for iy:=1 to tilesizey do
-     for iz:=1 to tilesizez do if TileMap[ix,iy,iz].base<>tile_na then begin
-       x1:=GeneratorSteps[TileIndex].tx+ix-1;
-       y1:=GeneratorSteps[TileIndex].ty+iy-1;
-       z1:=GeneratorSteps[TileIndex].tz+iz-1;
-       tmpMap^[x1,y1,z1]:=VisibleTile_code;
-       if ix=1         then if TileMap[ix,iy,iz].faces[angle_left] <>face_wall then SetCandidate(x1-1,y1,z1);
-       if ix=tilesizex then if TileMap[ix,iy,iz].faces[angle_right]<>face_wall then SetCandidate(x1+1,y1,z1);
-       if iy=1         then if TileMap[ix,iy,iz].faces[angle_top] <>face_wall then SetCandidate(x1,y1-1,z1);
-       if iy=tilesizey then if TileMap[ix,iy,iz].faces[angle_bottom]<>face_wall then SetCandidate(x1,y1+1,z1);
-       //z-part is buggy-woogie!!! Should work fine, but I don't recommend tiles with free faces at up&down levels
-       if iz=1         then if TileMap[ix,iy,iz].floor[angle_stairs_up] <>face_wall then SetCandidate(x1,y1,z1-1);
-       if iz=tilesizez then if TileMap[ix,iy,iz].floor[angle_stairs_down]<>face_wall then SetCandidate(x1,y1,z1+1);
-     end;
- end;}
-end;
-
 //this procedure creates 'chunks' of the tiles to improve FPS and etc.
-//Neighbours is all tiles that can be visible from this specific tile.
-//So it is enough to add Neighbours and Neighbours of Neighbours to completely cover all the tiles that
-//can be seen 'from this point'. There are few bugs with z-shifts, but let's leave them for the other day.
+//Neighbours is all tiles that can be visible from this specific xyz.
 procedure GetNeighbours;
-var i,j,ix,iy,iz,x1,y1,z1:integer;
-    k1,k2,k3:integer;
+const raycast_corner_accuracy=0.001;
+var i,j,ix,iy,iz:integer;
+    fi,theta,d_alpha,d_fi:single;
+    x0,y0,z0,vx,vy,vz:single;
+    x1,y1,z1:single;
+    xx0,yy0,zz0,xx,yy,zz:integer;
+    dx,dy,dz:integer;
     flg:boolean;
+    startRaycastTime:TDateTime;
+    Basic_Neighbours_Value:integer;//base value for amount of neighbours/tile (proportional to max*maxy*maxz
 begin
- new(TmpMap);
-
- //clear neighbours
- for k1:=1 to n_tiles do
-  for k2:=1 to n_tiles do Neighbours[k1,k2]:=0;
+ StartRaycastTime:=now;
+ writeln('raycasting...');
+ //clear neighbours and MapTileIndex
+ for ix:=1 to maxx do
+  for iy:=1 to maxy do
+   for iz:=1 to maxz do begin
+     MapTileIndex[ix,iy,iz]:=-1;
+     for i:=1 to n_tiles do Neighbours[ix,iy,iz][i]:=0;
+   end;
 
  //Fill MapTileIndex for quick access here and in-game
- for i:=1 to n_tiles do with Tiles[GeneratorSteps[i].Tile_type] do
+ for i:=1 to n_tiles do if not Tiles[GeneratorSteps[i].tile_type].blocker then with Tiles[GeneratorSteps[i].Tile_type] do
    for ix:=1 to tilesizex do
     for iy:=1 to tilesizey do
      for iz:=1 to tilesizez do if TileMap[ix,iy,iz].base<>tile_na then
        MapTileIndex[GeneratorSteps[i].tx+ix-1,GeneratorSteps[i].ty+iy-1,GeneratorSteps[i].tz+iz-1]:=i;
+ {the following raycasting algorithm is extremely inefficient...
+ However, I found no easy way to improve it significantly without missing any tiles and its better to spend more time now but provide for better visual and higher FPS
+ The main idea is following:
+ We select 'this tile' and raycast from 8 of its corner points in all sphere around with angular step d_alpha which is ~half minimal possible view angle for a 1x1x1 tile
+ Then we sum how many times each tile has been hit by our raycast. If it is 0, then this tile is invisible and may be switched-off.
+ If this is above 0, then this number is the tile priority we may use to dynamically choose different LODs if FPS is low}
 
- //now, cycle through all tiles to find their neighbours by raycast
- for i:=1 to n_tiles do with Tiles[GeneratorSteps[i].Tile_type] do begin
-   currentJob:=i;
-   candidate_initialized:=false;
-   //reset the temporary map //awfully ugly practice... but I've got no idea how to avoid this
-   for ix:=1 to maxx do
-    for iy:=1 to maxy do
-     for iz:=1 to maxz do tmpMap^[ix,iy,iz]:=-1;
-   //set current tile as SurceTileCode;
-   //and create first (direct) neighbours
-   //direct neighbours are not candidates - they are directly adjacent tiles.
-   for ix:=1 to tilesizex do
-    for iy:=1 to tilesizey do
-     for iz:=1 to tilesizez do if TileMap[ix,iy,iz].base<>tile_na then begin
-       x1:=GeneratorSteps[i].tx+ix-1;
-       y1:=GeneratorSteps[i].ty+iy-1;
-       z1:=GeneratorSteps[i].tz+iz-1;
-       tmpMap^[x1,y1,z1]:=SourceTile_code;
-       if ix=1         then if TileMap[ix,iy,iz].faces[angle_left] <>face_wall then AddToNeighbours(MapTileIndex[x1-1,y1,z1]);
-       if ix=tilesizex then if TileMap[ix,iy,iz].faces[angle_right]<>face_wall then AddToNeighbours(MapTileIndex[x1+1,y1,z1]);
-       if iy=1         then if TileMap[ix,iy,iz].faces[angle_top] <>face_wall then AddToNeighbours(MapTileIndex[x1,y1-1,z1]);
-       if iy=tilesizey then if TileMap[ix,iy,iz].faces[angle_bottom]<>face_wall then AddToNeighbours(MapTileIndex[x1,y1+1,z1]);
-       //z-part is buggy-woogie!!! Should work fine, but I don't recommend tiles with free faces at up&down levels
-       if iz=1         then if TileMap[ix,iy,iz].floor[angle_stairs_up] <>face_wall then AddToNeighbours(MapTileIndex[x1,y1,z1-1]);
-       if iz=tilesizez then if TileMap[ix,iy,iz].floor[angle_stairs_down]<>face_wall then AddToNeighbours(MapTileIndex[x1,y1,z1+1]);
-     end;
- end;
- //now do the raycasting... poor me...
- //UNIMPLEMENTED YET due to inability to add/replace tiles in realtime (at the moment)
- //the algorithms are actually ready, just some time to punch in and implement them here
- repeat
+ d_alpha:=1/sqrt(sqr(maxx)+sqr(maxy)+sqr(maxz))*2;
+ for iz:=1 to maxz do begin
+  for ix:=1 to maxx do
+   for iy:=1 to maxy do if MapTileIndex[ix,iy,iz]>0 then
 
-   candidate_initialized:=false;
- until not candidate_initialized;
- dispose(TmpMap);
+     for dx:=0 to 1 do
+      for dy:=0 to 1 do
+       for dz:=0 to 1 do begin{these enumerate 8 corners, i.e. we have to raycast 8 spheres}
+         {x0,y0,z0 is initial point randomly near the corner}
+         if dx=0 then x0:=ix+raycast_corner_accuracy*(random+0.1) else x0:=ix+1-raycast_corner_accuracy*(random+0.1);
+         if dy=0 then y0:=iy+raycast_corner_accuracy*(random+0.1) else y0:=iy+1-raycast_corner_accuracy*(random+0.1);
+         if dz=0 then z0:=iz+raycast_corner_accuracy*(random+0.1) else z0:=iz+1-raycast_corner_accuracy*(random+0.1);
+         {initialize fi&theta}
+         theta:=0;
+         repeat
+           if (theta>0) and (theta<Pi) then d_fi:=d_alpha/sin(theta) else d_fi:=2*Pi; //fi angular step is different depending on theta to maintain the same spatial step
+           fi:=0;
+           repeat
+             {---- begin 1 raycast at (fi,theta) ----}
+             {first determining raycast vector components}
+             vx:=sin(theta)*cos(fi);
+             vy:=sin(theta)*sin(fi);
+             vz:=cos(theta);
+             x1:=x0;
+             y1:=y0;
+             z1:=z0;
+             xx:=ix;
+             yy:=iy;
+             zz:=iz;
+             flg:=false;
+             {now move along the vector sequentially checking all x<>x, y<>y and z<>z faces}
+             repeat
+               xx0:=xx;
+               yy0:=yy;
+               zz0:=zz;
+               x1:=x1+vx/100;
+               y1:=y1+vy/100;
+               z1:=z1+vz/100;
+               xx:=trunc(x1);
+               yy:=trunc(y1);
+               zz:=trunc(z1);
+               if (xx<>xx0) or (yy<>yy0) or (zz<>zz0) then begin
+                if MapTileIndex[xx0,yy0,zz0]=-1 then flg:=true else begin
+                 inc(Neighbours[ix,iy,iz][MapTileIndex[xx0,yy0,zz0]]);
+                 if (xx<>xx0) then begin
+                   if (xx>xx0) and (Map[xx0,yy0,zz0].faces[angle_right]=face_wall) then flg:=true;
+                   if (xx<xx0) and (Map[xx0,yy0,zz0].faces[angle_left]=face_wall) then flg:=true;
+                 end;
+                 if (yy<>yy0) then begin
+                   if (yy>yy0) and (Map[xx0,yy0,zz0].faces[angle_bottom]=face_wall) then flg:=true;
+                   if (yy<yy0) and (Map[xx0,yy0,zz0].faces[angle_top]=face_wall) then flg:=true;
+                 end;
+                 if (zz<>zz0) then begin
+                   if (zz>zz0) and (Map[xx0,yy0,zz0].floor[angle_stairs_down]=floor_wall) then flg:=true;
+                   if (zz<zz0) and (Map[xx0,yy0,zz0].floor[angle_stairs_up]=floor_wall) then flg:=true;
+                 end;
+                end;
+               end;
+             until flg;
+             {---- end 1 raycast at (fi,theta) ----}
+             fi+=d_fi;
+           until fi>=2*Pi;
+           if (theta<Pi/2) and (theta+d_alpha>=Pi/2) then theta:=Pi/2 else theta+=d_alpha; //It is mandatory to catch exactly Pi/2 for theta
+         until theta>Pi;
 
- //now, let's make neighbours of neighbours
- for k1:=1 to n_tiles do
-  for k2:=1 to n_tiles do if Neighbours[k1,k2]=1 then
-   for k3:=1 to n_tiles do
-    if (Neighbours[k2,k3]=1) and (Neighbours[k1,k3]=0) then Neighbours[k1,k3]:=2;
+       end;
+   writeln('raycasting ',100*iz div maxz,'%');
+   end;
+  {one more thing left to do - check for blockers because they are not included in MapTileIndex!}
+  for i:=1 to n_tiles do if Tiles[GeneratorSteps[i].tile_type].blocker then begin
+    xx:=GeneratorSteps[i].tx;
+    yy:=GeneratorSteps[i].ty;
+    zz:=GeneratorSteps[i].tz;
+    j:=-1;
+    repeat
+      inc(j);
+    until (Tiles[GeneratorSteps[i].tile_type].TileMap[1,1,1].faces[j]>=face_free) or (j>=MaxAngles);
+    for ix:=1 to maxx do
+     for iy:=1 to maxy do
+      for iz:=1 to maxz do
+       Neighbours[ix,iy,iz][i]:=Neighbours[ix,iy,iz][MapTileIndex[xx+a_dx(j),yy+a_dy(j),zz]];
+  end;
+  {and one more thing... calculate basic neighbours
+  These coefficients allow replace distant tiles for LODs (currently just tiles without placeholders) to improve FPS.
+  Neighbours_limit causes almost no artefacts at current tileset. Only occasional glitches at stairs.
+  Neighbours_limit_max is heavy on artefacts and practically is the largest rational value possible
+  For some stupid reason I can't estimate it approximately correctly :(}
+  Basic_Neighbours_Value:=maxint;
+  for i:=1 to n_tiles do if not Tiles[generatorsteps[i].tile_type].blocker then
+    if (Neighbours[generatorsteps[i].tx,generatorsteps[i].ty,generatorsteps[i].tz][i]>0) and (Basic_Neighbours_Value>Neighbours[generatorsteps[i].tx,generatorsteps[i].ty,generatorsteps[i].tz][i]) then Basic_Neighbours_Value:=Neighbours[generatorsteps[i].tx,generatorsteps[i].ty,generatorsteps[i].tz][i];
+  writeln('Basic_Neighbours_Value ',Basic_Neighbours_Value);
+  Neighbours_limit_min:=1; //used for LODs management
+  Neighbours_limit:=round(10*sqrt(Basic_Neighbours_Value/4000));
+  Neighbours_limit_max:=Neighbours_limit*10;
+
+
+  writeln('Raycasting done in ',trunc((now-StartRayCastTime)*24*60),' min ',round((now-StartRayCastTime)*24*60*60-trunc((now-StartRayCastTime)*24*60)*60),' s');
 end;
 
 {------------------------------------------------------------------------------------}
@@ -647,16 +674,23 @@ begin
  mapPlaceholderElements:=0;
  for i:=1 to n_tiles do begin
    inc(mapElements);
-   MapTiles[mapElements]:=TTransformNode.Create('','');
-   MapTiles[mapElements].translation:=Vector3Single(2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].ty),-2*myscale*(GeneratorSteps[i].tz));
-   MapTiles[mapElements].scale:=Vector3Single(myscale,myscale,myscale);
+   //this is full LevelOfDetail
+   MapTiles[mapElements][1]:=TTransformNode.Create('','');
+   MapTiles[mapElements][1].translation:=Vector3Single(2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].ty),-2*myscale*(GeneratorSteps[i].tz));
+   MapTiles[mapElements][1].scale:=Vector3Single(myscale,myscale,myscale);
+   //this one is without the placeholders!
+   MapTiles[mapElements][2]:=TTransformNode.Create('','');
+   MapTiles[mapElements][2].translation:=Vector3Single(2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].ty),-2*myscale*(GeneratorSteps[i].tz));
+   MapTiles[mapElements][2].scale:=Vector3Single(myscale,myscale,myscale);
    for j:=0 to Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren.Count-1 do if Tiles[GeneratorSteps[i].Tile_type].Tile3d.fdChildren[j] is TTransformNode then begin
      //if this is a placeholder, then some work is needed t
      //else no work, just add the tile element to the 'MapTiles[i]'
      if copy(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j].NodeName,1,1)='(' then begin
-       AddPlaceHolderRecoursive(MapTiles[mapElements]{ContainerObject},Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j] as TTransformNode{ParentObject});
-     end else
-       MapTiles[mapElements].FdChildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j]);
+       AddPlaceHolderRecoursive(MapTiles[mapElements][1]{ContainerObject},Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j] as TTransformNode{ParentObject});
+     end else begin
+       MapTiles[mapElements][1].FdChildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j]);
+       MapTiles[mapElements][2].FdChildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j]);
+     end;
    end;
  end;
 
@@ -668,9 +702,9 @@ begin
  for i:=1 to mapElements do begin
    MapSwitches[i]:=TSwitchNode.Create('','');
    MapSwitches[i].WhichChoice:=0;
-   MapSwitches[i].FdChildren.add(MapTiles[i]);
+   MapSwitches[i].FdChildren.add(MapTiles[i][1]);  //full LOD
+   MapSwitches[i].FdChildren.add(MapTiles[i][2]);  //cut LOD
    MainRoot.FdChildren.Add(MapSwitches[i]);
-   MapLoaded[i]:=1;
  end;
 
  //create light that follows the player
@@ -726,7 +760,7 @@ begin
     if not (deepest_Level=maxz) then writeln('Not all levels of the dungeons used. Re-generating map...');
   until (((Target_Map_Area-MapArea)/Target_Map_Area<allow_error) and (deepest_Level=maxz)) or (random<0.01);
 
-  writeln('Job finished in ',round((now-timestamp)*24*60*60*1000),'ms');
+  writeln('Job finished in ',round((now-timestamp)*24*60*60),'s');
 
   LastTimeStamp:=now;
   writeln('making minimap');
@@ -737,7 +771,7 @@ begin
 
   CreateDistanceMap;
 
-  writeln('Done in ',round((now-LastTimeStamp)*24*60*60*1000),'ms');
+  writeln('Done in ',round((now-LastTimeStamp)*24*60*60),'s');
 
    //Place Rose
    RoseT:=T3DTransform.Create(Window.SceneManager);

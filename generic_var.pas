@@ -30,17 +30,17 @@ const anisotropic_smoothing=4;        //rendering parameters for easy access
       Shadow_maps_enabled=false;
       Shadow_volumes_enabled=false;
 
-const maxmaxx=17;                      //max map size
-      maxmaxy=17;
-      maxmaxz=4;
+const maxmaxx=12;                      //max map size
+      maxmaxy=12;
+      maxmaxz=6;
       maxMapTiles=maxmaxx*maxmaxy*maxmaxz;      //map volume
       maxMapPlaceholders=MaxMapTiles*30;
 
-const maxMaxPlaceholdersTypes=100;     //for static arrays size
-      MaxMaxPlaceholderAtlasRecords=100;
-      MaxMaxTilesTypes=100;            //tiles variants
+const maxMaxPlaceholdersTypes=130;     //for static arrays size
+      MaxMaxPlaceholderAtlasRecords=130;
+      MaxMaxTilesTypes=130;            //tiles variants
 
-const Target_Map_Area=maxmaxx*maxmaxy*maxmaxz div 20;
+const Target_Map_Area=maxmaxx*maxmaxy*maxmaxz div 5;
 
 const base_models_folder='DAT'+pathdelim+'models'+pathdelim;
       tiles_models_folder=base_models_folder+'tiles'+pathdelim;
