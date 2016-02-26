@@ -93,26 +93,18 @@ end;
 {=======================================================================}
 
 { This procedure is a Chunk manager.
-During generation process we've chunked our map into areas (not yet, actually, but soon).
+During generation process we've chunked our map into areas
 Those areas are everything that is visible from this tile.
 Everything else is switched-off by TSwitchNode to keep FPS.
-Later we'll make some LODs here also.
-
-At this moment it just grabs current level the player is on and one level above and one below.
-Produces glitches and very inefficient, but easy-to-do and better-than-nothing.
+Later we'll make some LODs here also. Maybe.
 }
 var p0x:integer=-1;
     p0y:integer=-1;
     p0z:integer=-1;
 procedure ChunkManager(Container: TUIContainer);
-var i,px,py,pz:integer;
-    activeTiles,LODtiles:integer;
+var i,j,px,py,pz:integer;
+    GroupActive:array[1..MaxGroups]of boolean;
 begin
- // temporary plug to raise FPS a little
- // I just switch off all tiles with z - player z greater than 1
- // this produces glitches at 2 and more storyed stairs, but I don't care yet :D
- // I'll fix this later
-
  if not firstrender then begin
    px:=round((Player.position[0])/myscale/2);
    if px<1 then px:=1;
@@ -124,22 +116,9 @@ begin
    if pz<1 then pz:=1;
    if pz>maxz then pz:=maxz;
    if (p0x<>px) or (p0y<>py) or (p0z<>pz) then begin
-      activeTiles:=0;
-      LODTiles:=0;
-      for i:=1 to n_tiles do
-       if Neighbours[px,py,pz][i]<=Neighbours_limit div 10 then MapSwitches[i].WhichChoice:=-1 else
-       if Neighbours[px,py,pz][i]>Neighbours_limit then begin
-         MapSwitches[i].WhichChoice:=0;
-         inc(activeTiles);
-       end else begin
-         MapSwitches[i].WhichChoice:=1;
-         inc(LODTiles);
-       end;
-      Tile_label.text.text:='Active tiles = '+inttostr(ActiveTiles)+' + '+inttostr(LODTiles)+' n-lim:'+inttostr(Neighbours_limit);
-      //Tile_label.text.text:='current Neighbours_limit = '+inttostr(Neighbours_limit);
-      //Tile_label.text.text:='This Tile Weight Value = '+inttostr(Neighbours[px,py,pz][MapTileIndex[px,py,pz]]);
-{       if abs(generatorSteps[i].tz-pz)<=1 then
-        MapSwitches[i].WhichChoice:=0 else MapSwitches[i].WhichChoice:=-1;}
+      for j:=1 to n_groups do GroupActive[j]:=false;
+      for i:=1 to n_tiles do if Neighbours[px,py,pz][i]>0 then GroupActive[groups[i]]:=true;
+      for j:=1 to n_groups do if GroupActive[j] then GroupsSwitches[j].whichChoice:=0 else GroupsSwitches[j].whichChoice:=-1;
       p0x:=px;
       p0y:=py;
       p0z:=pz;
@@ -167,7 +146,6 @@ end;
 procedure Update(Container: TUIContainer);
 var ix,iy:integer;
     copymap:TCastleImage;
-    PlayerTile:integer;
 begin
     if gamemode=gamemode_game then begin
 
@@ -176,11 +154,6 @@ begin
      inc(framecount);
      if (lasttime>0) and ((now-lasttime)>1/24/60/60) then begin
        label_FPS.text.text:=inttostr(framecount{round(1/(now-lasttime)/24/60/60)});
-       //here we dynamically adjust FPS in case it lags... not yet fine, but at least something
-       if (framecount<const_FPS_goal) then inc(Neighbours_limit,Neighbours_limit_max div 10 + 1) else
-       if (framecount>const_FPS_goal) then dec(Neighbours_limit,Neighbours_limit_max div 10 + 1);
-       if (Neighbours_limit>Neighbours_limit_max) then Neighbours_limit:=Neighbours_limit_max else
-       if (Neighbours_limit<Neighbours_limit_min) then Neighbours_limit:=Neighbours_limit_min;
        framecount:=0;
        lasttime:=now;
      end;

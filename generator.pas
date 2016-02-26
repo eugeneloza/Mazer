@@ -42,14 +42,17 @@ type MapIntArray = array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of integer;
 
 var n_tiles:integer;
 
-    MapTiles: array[1..maxMapTiles] of array[1..MaxLODs] of TTransformNode;
+    MapTiles: array[1..maxMapTiles] of TTransformNode;
     MapPlaceholders: array[1..maxMapPlaceholders] of TtransformNode;
     mapElements,mapPlaceholderElements:integer;
-    MapSwitches: array[1..MaxMapTiles] of TSwitchNode;   //switches contain all LODs
+    //these are larger groups for tiles (to optimize FPS and other stuff)
+    MapGroups: array[1..maxGroups] of TStaticGroupNode;
+    GroupsSwitches: array[1..maxGroups] of TSwitchNode;
 
     MapTileIndex:MapIntArray; //here we store all tiles numbers at specific xyz; used to quicken search for neighbours + debug TileLabel in-game
     Neighbours: array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of array [1..maxMapTiles] of integer; //this stores all neigbours with all 'distance' relation for LODs
-    Neighbours_limit,Neighbours_limit_max,Neighbours_limit_min: integer;    //used for LODs management
+    groups: array [1..maxMapTiles] of integer;//stores group numbers for quick access
+    N_groups: integer;
 
     MainRoot: TX3DRootNode;
     MainScene: TCastleScene;
@@ -373,7 +376,7 @@ for iy:=1 to maxy do
   Rosey:=ty;
   Rosez:=tz;
 {end else begin
-  {error}
+  {if error}
   Rosex:=1;
   Rosey:=1;
   Rosez:=1;
@@ -442,7 +445,10 @@ var i,j,ix,iy,iz:integer;
     dx,dy,dz:integer;
     flg:boolean;
     startRaycastTime:TDateTime;
-    Basic_Neighbours_Value:integer;//base value for amount of neighbours/tile (proportional to max*maxy*maxz
+
+    Tiles_count:array[1..maxMapTiles]of integer;
+    max_tiles_count,max_tile_pos:integer;
+    debug_group_size:integer;
 begin
  StartRaycastTime:=now;
  writeln('raycasting...');
@@ -460,6 +466,7 @@ begin
     for iy:=1 to tilesizey do
      for iz:=1 to tilesizez do if TileMap[ix,iy,iz].base<>tile_na then
        MapTileIndex[GeneratorSteps[i].tx+ix-1,GeneratorSteps[i].ty+iy-1,GeneratorSteps[i].tz+iz-1]:=i;
+
  {the following raycasting algorithm is extremely inefficient...
  However, I found no easy way to improve it significantly without missing any tiles and its better to spend more time now but provide for better visual and higher FPS
  The main idea is following:
@@ -502,9 +509,9 @@ begin
                xx0:=xx;
                yy0:=yy;
                zz0:=zz;
-               x1:=x1+vx/100;
-               y1:=y1+vy/100;
-               z1:=z1+vz/100;
+               x1:=x1+vx/10;
+               y1:=y1+vy/10;
+               z1:=z1+vz/10;
                xx:=trunc(x1);
                yy:=trunc(y1);
                zz:=trunc(z1);
@@ -549,21 +556,46 @@ begin
       for iz:=1 to maxz do
        Neighbours[ix,iy,iz][i]:=Neighbours[ix,iy,iz][MapTileIndex[xx+a_dx(j),yy+a_dy(j),zz]];
   end;
-  {and one more thing... calculate basic neighbours
-  These coefficients allow replace distant tiles for LODs (currently just tiles without placeholders) to improve FPS.
-  Neighbours_limit causes almost no artefacts at current tileset. Only occasional glitches at stairs.
-  Neighbours_limit_max is heavy on artefacts and practically is the largest rational value possible
-  For some stupid reason I can't estimate it approximately correctly :(}
-  Basic_Neighbours_Value:=maxint;
-  for i:=1 to n_tiles do if not Tiles[generatorsteps[i].tile_type].blocker then
-    if (Neighbours[generatorsteps[i].tx,generatorsteps[i].ty,generatorsteps[i].tz][i]>0) and (Basic_Neighbours_Value>Neighbours[generatorsteps[i].tx,generatorsteps[i].ty,generatorsteps[i].tz][i]) then Basic_Neighbours_Value:=Neighbours[generatorsteps[i].tx,generatorsteps[i].ty,generatorsteps[i].tz][i];
-  writeln('Basic_Neighbours_Value ',Basic_Neighbours_Value);
-  Neighbours_limit_min:=1; //used for LODs management
-  Neighbours_limit:=round(10*sqrt(Basic_Neighbours_Value/4000));
-  Neighbours_limit_max:=Neighbours_limit*10;
-
-
   writeln('Raycasting done in ',trunc((now-StartRayCastTime)*24*60),' min ',round((now-StartRayCastTime)*24*60*60-trunc((now-StartRayCastTime)*24*60)*60),' s');
+
+  {this part of the code will combine tiles in larger groups to boost FPS
+  also this will provide for LOD of the whole group generation and far land support for overworld later
+  I'm not yet sure how textures will behave... but let's leave this question for later}
+  writeln('Preparing TGroupNodes...');
+  {first we just count how much time a tile is 'hit' by neighbours
+  Therefore we find "more popular" tiles which will be 'seeds' for our groups}
+  for i:=1 to n_tiles do tiles_count[i]:=0;
+  for ix:=1 to maxx do
+   for iy:=1 to maxy do
+    for iz:=1 to maxz do
+     for i:=1 to n_tiles do if Neighbours[ix,iy,iz][i]>0 then inc(Tiles_count[i]);
+  {now let's start the main algorithm}
+  N_groups:=0;
+  repeat
+    //let's find next 'max' node position and start grouping from it
+    Max_Tiles_Count:=0;
+    for i:=1 to n_tiles do if max_Tiles_Count<tiles_count[i] then begin
+      max_Tiles_Count:=Tiles_count[i];
+      max_Tile_pos:=i;
+    end;
+    //if there are still nodes remaining we create a new group to hold them
+    if Max_Tiles_count>0 then begin
+      inc(n_groups);
+      debug_group_size:=0;
+      //scan max_tile_pos tile and mark all its neighbours as a group
+      for dx:=0 to Tiles[GeneratorSteps[max_Tile_pos].Tile_Type].tilesizex-1 do
+       for dy:=0 to Tiles[GeneratorSteps[max_Tile_pos].Tile_Type].tilesizey-1 do
+        for dz:=0 to Tiles[GeneratorSteps[max_Tile_pos].Tile_Type].tilesizez-1 do
+         for i:=1 to n_tiles do if (Neighbours[GeneratorSteps[max_Tile_pos].tx+dx,GeneratorSteps[max_Tile_pos].ty+dy,GeneratorSteps[max_Tile_pos].tz+dz][i]>0) and (Tiles_count[i]>0) then begin
+           Tiles_count[i]:=-1;     //don't add this tile to another group
+           groups[i]:=n_groups; //add this tile to this group
+           inc(debug_group_size);
+         end;
+      writeln(n_groups,' group size=',debug_group_size);
+    end;
+  //  writeln('Max_Tiles_Count=',Max_Tiles_Count);
+  until Max_Tiles_count=0;
+  writeln('TGroupNodes list is ready... n_groups=',n_groups);
 end;
 
 {------------------------------------------------------------------------------------}
@@ -674,23 +706,16 @@ begin
  mapPlaceholderElements:=0;
  for i:=1 to n_tiles do begin
    inc(mapElements);
-   //this is full LevelOfDetail
-   MapTiles[mapElements][1]:=TTransformNode.Create('','');
-   MapTiles[mapElements][1].translation:=Vector3Single(2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].ty),-2*myscale*(GeneratorSteps[i].tz));
-   MapTiles[mapElements][1].scale:=Vector3Single(myscale,myscale,myscale);
-   //this one is without the placeholders!
-   MapTiles[mapElements][2]:=TTransformNode.Create('','');
-   MapTiles[mapElements][2].translation:=Vector3Single(2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].ty),-2*myscale*(GeneratorSteps[i].tz));
-   MapTiles[mapElements][2].scale:=Vector3Single(myscale,myscale,myscale);
+   MapTiles[mapElements]:=TTransformNode.Create('','');
+   MapTiles[mapElements].translation:=Vector3Single(2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].ty),-2*myscale*(GeneratorSteps[i].tz));
+   MapTiles[mapElements].scale:=Vector3Single(myscale,myscale,myscale);
    for j:=0 to Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren.Count-1 do if Tiles[GeneratorSteps[i].Tile_type].Tile3d.fdChildren[j] is TTransformNode then begin
      //if this is a placeholder, then some work is needed t
      //else no work, just add the tile element to the 'MapTiles[i]'
      if copy(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j].NodeName,1,1)='(' then begin
-       AddPlaceHolderRecoursive(MapTiles[mapElements][1]{ContainerObject},Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j] as TTransformNode{ParentObject});
-     end else begin
-       MapTiles[mapElements][1].FdChildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j]);
-       MapTiles[mapElements][2].FdChildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j]);
-     end;
+       AddPlaceHolderRecoursive(MapTiles[mapElements]{ContainerObject},Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j] as TTransformNode{ParentObject});
+     end else
+       MapTiles[mapElements].FdChildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j]);
    end;
  end;
 
@@ -698,13 +723,16 @@ begin
 //!!! WE NEED TO ADD EVERYTHING ONCE AND RENDER IT TO PREPARE EVERYTHING, LIKE LIGHT, ETC.
 //THEN GAME WILL REMOVE THE UNNEEDED CHUNKS AT FIRST RENDER
 //Doesn't work now...
+
+ for i:=1 to N_groups do MapGroups[i]:=TStaticGroupNode.Create('','');
+ for i:=1 to N_tiles do MapGroups[groups[i]].FdChildren.Add(MapTiles[i]);
+
  MainRoot := TX3DRootNode.Create('', '');
- for i:=1 to mapElements do begin
-   MapSwitches[i]:=TSwitchNode.Create('','');
-   MapSwitches[i].WhichChoice:=0;
-   MapSwitches[i].FdChildren.add(MapTiles[i][1]);  //full LOD
-   MapSwitches[i].FdChildren.add(MapTiles[i][2]);  //cut LOD
-   MainRoot.FdChildren.Add(MapSwitches[i]);
+ for i:=1 to N_groups do begin
+   GroupsSwitches[i]:=TSwitchNode.Create('','');
+   GroupsSwitches[i].WhichChoice:=0;
+   GroupsSwitches[i].FdChildren.Add(MapGroups[i]);
+   MainRoot.FdChildren.Add(GroupsSwitches[i]);
  end;
 
  //create light that follows the player
@@ -720,6 +748,8 @@ begin
  nav.FdHeadLightNode.Value := NavLight;
  nav.FdHeadlight.Value:=true;
  MainRoot.FdChildren.add(nav);
+
+ Save3D(MainRoot,'TGroupNode.x3d','','',xeXML);
 
 //finally add everything to the scene.
  MainScene:=TCastleScene.create(window);

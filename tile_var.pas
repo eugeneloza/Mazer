@@ -22,7 +22,7 @@ unit Tile_var;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, strutils,
   castlescene, castleimages, castlescenecore, X3DNodes,
   x3dload,
   generic_var, MazerMapParser;
@@ -159,12 +159,58 @@ begin
   end;
 end;
 {-----------------------------------------------------------------------------------}
+Procedure AddChildRecoursive(target,source:TAbstractX3DGroupingNode);
+var i:integer;
+    tmpTransform:TTransformNode;
+    tmpGroup:TGroupNode;
+begin
+  {Scan loaded model for it's descendants
+  and add any valuable data to Tile3D
+  dropping all blender exporter garbage on the way
+  at this moment it's:
+  "*_ifs_TRANSFORM" which is a useless unit transform
+  "group_ME_*" which is a useless group transform}
+  for i:=0 to source.FdChildren.Count-1 do begin
+    //copy TTransformNode
+    if (source.FdChildren[i] is TTransformNode) then begin
+      if not AnsiContainsText(source.FdChildren[i].NodeName,'_ifs_TRANSFORM') then begin
+        tmpTransform:=TTransformNode.Create(source.FdChildren[i].NodeName,'');
+        tmpTransform.Translation:=(source.FdChildren[i] as TTransformNode).Translation;
+        tmpTransform.Rotation:=(source.FdChildren[i] as TTransformNode).Rotation;
+        tmpTransform.scale:=(source.FdChildren[i] as TTransformNode).scale;
+        AddChildRecoursive(TmpTransform,source.FdChildren[i] as TTransformNode);
+        target.FdChildren.add(TmpTransform);
+      end else AddChildRecoursive(target,source.FdChildren[i] as TTransformNode); // drop junk exporter node
+    end else
+    //copy TGroupNode... Is that needed? well...let's leave it here for now
+    if (source.FdChildren[i] is TGroupNode) then begin
+      if not AnsiContainsText(source.FdChildren[i].NodeName,'group_ME_') then begin
+         writeln(source.FdChildren[i].NodeName);
+         tmpGroup:=TGroupNode.create(source.FdChildren[i].NodeName,'');
+         AddChildRecoursive(tmpGroup,source.FdChildren[i] as TGroupNode);
+         target.FdChildren.add(tmpGroup);
+      end else AddChildRecoursive(target,source.FdChildren[i] as TGroupNode); // drop junk exporter node
+    end else
+    //copy TShapeNode, no recoursion, just add it
+    if (source.FdChildren[i] is TShapeNode) then begin
+      target.FdChildren.add(source.FdChildren[i]);
+      //todo: play with Appearance here!
+    end else
+    //copy TAbstractLightNode, no recoursion, just add it
+    if (source.FdChildren[i] is TAbstractLightNode) then begin
+      target.FdChildren.add(source.FdChildren[i]);
+    end;
+
+  end;
+end;
+
 
 Function LoadTile(fileName:string):Map_Tile_type;
 var val1,j:integer;
     s:string;
     tmp:XYZ_record;
     TmpTile:Map_Tile_type;
+    TmpRootNode:TX3DRootNode;
     thisface,thisvalue,err:integer;
 
     i1,i2,i3,i4:integer;
@@ -174,22 +220,18 @@ var val1,j:integer;
     Texture_diffuse,texture_normal:TImageTextureNode;
     flg:boolean;
 begin
- TmpTile.Tile3D:=Load3D(tiles_models_folder+fileName);
+ TmpRootNode:=Load3D(tiles_models_folder+fileName);
 
  //create texture properties for anisotropic smoothing
- if anisotropic_smoothing>0 then begin
-   textureProperties:=TTexturePropertiesNode.Create('','');
-   TextureProperties.AnisotropicDegree:=anisotropic_smoothing;
-   TextureProperties.FdMagnificationFilter.Value:='DEFAULT';
-   TextureProperties.FdMinificationFilter.Value:='DEFAULT';
- end else TextureProperties:=nil;
- //scan Tile3D for TImageTexture derivatives
- for i1:=0 to TmpTile.Tile3D.FdChildren.count-1 do
-   if TmpTile.Tile3D.FdChildren[i1] is TTransformNode then begin
-     level1:=TmpTile.Tile3D.FdChildren[i1] as TTransformNode;
+ //TODO:No need to make that 1000 of times!!! Only once!
+
+ //scan temporary X3DRootNode for TImageTexture derivatives
+ for i1:=0 to TmpRootNode.FdChildren.count-1 do
+   if TmpRootNode.FdChildren[i1] is TTransformNode then begin
+     level1:=TmpRootNode.FdChildren[i1] as TTransformNode;
      {memo1.lines.add('TransformNode '+level1.NiceName);}
      for i2:=0 to level1.FdChildren.count-1 do
-       if TmpTile.Tile3D.FdChildren[i2] is TTransformNode then begin
+       if TmpRootNode.FdChildren[i2] is TTransformNode then begin
          level2:=level1.FdChildren[i2] as TTransformNode;
          {memo1.lines.add('TransformNode2 '+level2.NiceName);}
          for i3:=0 to level2.FdChildren.count-1 do
@@ -218,6 +260,9 @@ begin
          end;
        end;
    end;
+
+ TmpTile.Tile3D:=TX3DRootNode.Create('','');
+ AddChildRecoursive(TmpTile.Tile3D,TmpRootNode);
 
  //now, parse the tile map (tile layout)
  //I make some excessive checks... just in case e.g. file format change, or file damage
@@ -270,8 +315,17 @@ end;
 Procedure LoadTiles;
 var i,j:integer;
     Rec : TSearchRec;
+
+    TmpRootNode:TX3DRootNode; //todo: make load placeholders as a separate procedure!!!
 begin
-  // now prepare 3D part + tile map view
+   if anisotropic_smoothing>0 then begin
+     textureProperties:=TTexturePropertiesNode.Create('','');
+     TextureProperties.AnisotropicDegree:=anisotropic_smoothing;
+     TextureProperties.FdMagnificationFilter.Value:='DEFAULT';
+     TextureProperties.FdMinificationFilter.Value:='DEFAULT';
+   end else TextureProperties:=nil;
+
+   // now prepare 3D part + tile map view
   i:=0;
   if FindFirst (tiles_models_folder + '*.x3d', faAnyFile - faDirectory, Rec) = 0 then
    try
@@ -303,7 +357,7 @@ begin
   end;
   CalculateTileFaces;
 
-  //grab the rose
+  //load the rose
   RoseS:=TCastleScene.create(Window.sceneManager);
   RoseS.spatial := [ssRendering];
   RoseS.processevents:=true;
@@ -319,7 +373,10 @@ begin
        //...
        for j:=1 to maxz do PlaceholderAtlas[i].PlaceholderRND[j]:=1.0;
        //if placeholderRND>0 then ...   // however that's not so trivial here as it was in tiles
-       Placeholders[i]:=Load3D(placeholders_models_folder+Rec.Name);
+       TmpRootNode:=Load3D(placeholders_models_folder+Rec.Name);
+       Placeholders[i]:=TX3DRootNode.Create('','');
+       AddChildRecoursive(Placeholders[i],TmpRootNode);
+
        PlaceholderAtlas[i].PlaceholderName:=Rec.Name;
        //else dec(i);
      until FindNext(Rec) <> 0;
