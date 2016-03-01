@@ -52,6 +52,12 @@
               <UseExternalDbgSyms Value="True"/>
             </Debugging>
           </Linking>
+          <Other>
+            <CustomOptions Value="-dTryCastleScenes"/>
+            <OtherDefines Count="1">
+              <Define0 Value="TryCastleScenes"/>
+            </OtherDefines>
+          </Other>
         </CompilerOptions>
       </Item2>
       <Item3 Name="Release">

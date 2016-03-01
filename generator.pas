@@ -46,18 +46,24 @@ var n_tiles:integer;
     MapPlaceholders: array[1..maxMapPlaceholders] of TtransformNode;
     mapElements,mapPlaceholderElements:integer;
     //these are larger groups for tiles (to optimize FPS and other stuff)
+    {$ifdef TryCastleScenes}
+    MapScenes: array[0..maxGroups] of TCastleScene;
+    MapRoots:array[0..maxGroups] of TX3DRootNode;
+    {$else}
     MapGroups: array[1..maxGroups] of TStaticGroupNode;
     GroupsSwitches: array[1..maxGroups] of TSwitchNode;
+
+    MainRoot: TX3DRootNode;
+    MainScene: TCastleScene;
+    {$endif}
+    Nav:TKambiNavigationInfoNode; /// !!!
+    NavLight:TPointLightNode;
 
     MapTileIndex:MapIntArray; //here we store all tiles numbers at specific xyz; used to quicken search for neighbours + debug TileLabel in-game
     Neighbours: array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of array [1..maxMapTiles] of integer; //this stores all neigbours with all 'distance' relation for LODs
     groups: array [1..maxMapTiles] of integer;//stores group numbers for quick access
     N_groups: integer;
 
-    MainRoot: TX3DRootNode;
-    MainScene: TCastleScene;
-    Nav:TKambiNavigationInfoNode; /// !!!
-    NavLight:TPointLightNode;
 
     Map: array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of Basic_Tile_Type;
     GeneratorSteps: array[1..maxMapTiles] of Generator_type;
@@ -724,7 +730,12 @@ begin
 //THEN GAME WILL REMOVE THE UNNEEDED CHUNKS AT FIRST RENDER
 //Doesn't work now...
 
- for i:=1 to N_groups do MapGroups[i]:=TStaticGroupNode.Create('','');
+{$ifdef TryCastleScenes}
+for i:=1 to N_groups do MapRoots[i] := TX3DRootNode.Create('', '');
+for i:=1 to N_tiles do MapRoots[groups[i]].FdChildren.Add(MapTiles[i]);
+{$else}
+MapGroups: array[1..maxGroups] of TStaticGroupNode;
+for i:=1 to N_groups do MapGroups[i]:=TStaticGroupNode.Create('','');
  for i:=1 to N_tiles do MapGroups[groups[i]].FdChildren.Add(MapTiles[i]);
 
  MainRoot := TX3DRootNode.Create('', '');
@@ -734,33 +745,50 @@ begin
    GroupsSwitches[i].FdChildren.Add(MapGroups[i]);
    MainRoot.FdChildren.Add(GroupsSwitches[i]);
  end;
+{$endif}
+//create light that follows the player
+NavLight:= TPointLightNode.Create('', '');
+NavLight.FdColor.Value := vector3single(1,0.5,0.1);
+NavLight.FdAttenuation.value := Vector3Single(0,0,6);
+NavLight.FdRadius.value:=5;
+NavLight.FdIntensity.value:=30;
+NavLight.FdOn.value:=true;
+NavLight.FdShadows.value:=false;
+//and create a respective navigation node and add it to the MainRoot
+nav:=TKambiNavigationInfoNode.Create('', '');
+nav.FdHeadLightNode.Value := NavLight;
+nav.FdHeadlight.Value:=true;
 
- //create light that follows the player
- NavLight:= TPointLightNode.Create('', '');
- NavLight.FdColor.Value := vector3single(1,0.5,0.1);
- NavLight.FdAttenuation.value := Vector3Single(0,0,6);
- NavLight.FdRadius.value:=5;
- NavLight.FdIntensity.value:=30;
- NavLight.FdOn.value:=true;
- NavLight.FdShadows.value:=false;
- //and create a respective navigation node and add it to the MainRoot
- nav:=TKambiNavigationInfoNode.Create('', '');
- nav.FdHeadLightNode.Value := NavLight;
- nav.FdHeadlight.Value:=true;
- MainRoot.FdChildren.add(nav);
-
- Save3D(MainRoot,'TGroupNode.x3d','','',xeXML);
+{$ifdef TryCastleScenes}
+MapRoots[0]:=TX3DRootNode.Create('','');
+MapRoots[0].FdChildren.add(nav);
+{$else}
+MainRoot.FdChildren.add(nav);
+//Save3D(MainRoot,'Map.x3d','','',xeXML);
+{$endif}
 
 //finally add everything to the scene.
- MainScene:=TCastleScene.create(window);
- MainScene.ShadowMaps:=Shadow_maps_enabled;  {?????}
- MainScene.Spatial := [ssRendering, ssDynamicCollisions];
- MainScene.ProcessEvents := true;
- MainScene.load(MainRoot,true);
- Window.Scenemanager.items.add(MainScene);
- Window.Scenemanager.ShadowVolumes:=true; {?????}
- Window.SceneManager.ShadowVolumesRender:=true; {?????}
- Window.SceneManager.mainScene:=MainScene;
+{$ifdef TryCastleScenes}
+for i:=0 to N_groups do begin
+  MapScenes[i]:=TCastleScene.Create(Window.Scenemanager);
+  MapScenes[i].ShadowMaps:=Shadow_maps_enabled;  {?????}
+  MapScenes[i].Spatial := [ssRendering, ssDynamicCollisions];
+  MapScenes[i].ProcessEvents := true;
+  MapScenes[i].Load(MapRoots[i],true);
+  Window.Scenemanager.items.add(MapScenes[i]);
+end;
+Window.SceneManager.mainScene:=MapScenes[0];
+{$else}
+MainScene:=TCastleScene.create(window);
+MainScene.ShadowMaps:=Shadow_maps_enabled;  {?????}
+MainScene.Spatial := [ssRendering, ssDynamicCollisions];
+MainScene.ProcessEvents := true;
+MainScene.load(MainRoot,true);
+Window.Scenemanager.items.add(MainScene);
+Window.SceneManager.mainScene:=MainScene;
+{$endif}
+Window.Scenemanager.ShadowVolumes:=true; {?????}
+Window.SceneManager.ShadowVolumesRender:=true; {?????}
 end;
 
 {=====================================================================}

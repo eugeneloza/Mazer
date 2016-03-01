@@ -118,7 +118,11 @@ begin
    if (p0x<>px) or (p0y<>py) or (p0z<>pz) then begin
       for j:=1 to n_groups do GroupActive[j]:=false;
       for i:=1 to n_tiles do if Neighbours[px,py,pz][i]>0 then GroupActive[groups[i]]:=true;
-      for j:=1 to n_groups do if GroupActive[j] then GroupsSwitches[j].whichChoice:=0 else GroupsSwitches[j].whichChoice:=-1;
+      {$ifdef TryCastleScenes}
+        for j:=1 to n_groups do if GroupActive[j] then MapScenes[j].Exists:=true else MapScenes[j].Exists:=false;
+      {$else}
+        for j:=1 to n_groups do if GroupActive[j] then GroupsSwitches[j].whichChoice:=0 else GroupsSwitches[j].whichChoice:=-1;
+      {$endif}
       p0x:=px;
       p0y:=py;
       p0z:=pz;
