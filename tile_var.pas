@@ -101,19 +101,23 @@ Type PlaceholderAtlasRecord=record
   compatibility_RND:array[1..maxMaxPlaceholdersTypes] of single;
 end;
 
+//define the dynamic arrays
+type TileAtlasArray=array[1..MaxMaxTilesTypes] of TileZAtlasRecord;
+type PlaceholderAtlasArray=array[1..maxMaxPlaceholdersTypes] of PlaceholderZAtlasRecord;
+type PlaceholderCompatibilityArray=array[1..MaxMaxPlaceholderAtlasRecords] of PlaceholderAtlasRecord;
+
 var Tiles: array[1..MaxMaxTilesTypes] of Map_Tile_Type;
-    TileAtlas: array[1..MaxMaxTilesTypes] of TileZAtlasRecord;
+    TileAtlas:^TileAtlasArray;
     MaxTilesTypes:integer=MaxMaxTilesTypes;
 
     Placeholders: array [1..maxMaxPlaceholdersTypes] of TX3DRootNode;
     MaxPlaceholderTypes:integer=maxMaxPlaceholdersTypes;
-    PlaceholderAtlas: array[1..maxMaxPlaceholdersTypes] of PlaceholderZAtlasRecord;
+    PlaceholderAtlas: ^PlaceholderAtlasArray;
     MaxPlaceholderAtlas:integer=maxMaxPlaceholdersTypes;
-    PlaceholderCompatibility: array[1..MaxMaxPlaceholderAtlasRecords] of PlaceholderAtlasRecord;
+    PlaceholderCompatibility: ^PlaceholderCompatibilityArray;
     MaxPlaceholderAtlasRecords:integer=MaxMaxPlaceholderAtlasRecords;
 
     RoseS:TCastleScene;
-
 
     TileMapLoaded:boolean; //if false then no tile map could have been loaded
 
@@ -326,6 +330,7 @@ begin
    end else TextureProperties:=nil;
 
    // now prepare 3D part + tile map view
+  new(TileAtlas);
   i:=0;
   if FindFirst (tiles_models_folder + '*.x3d', faAnyFile - faDirectory, Rec) = 0 then
    try
@@ -333,7 +338,7 @@ begin
        inc(i);
        //load TileAtlasRecrod for this map
        //...
-       for j:=1 to maxz do TileAtlas[i].TileRND[j]:=1.0;
+       for j:=1 to maxz do TileAtlas^[i].TileRND[j]:=1.0;
        //if tileRND>0 then ...
        Tiles[i]:=LoadTile(Rec.Name);
        Tiles[i].TileName:=Rec.Name;
@@ -364,6 +369,7 @@ begin
   RoseS.load(items_models_folder+'47386_Rose_CC0_by_Hyuku_merged_joined_scaled.x3d');
 
   //load placeholders
+  new(PlaceholderAtlas);
   i:=0;
   if FindFirst (placeholders_models_folder + '*.x3d', faAnyFile - faDirectory, Rec) = 0 then
    try
@@ -371,13 +377,13 @@ begin
        inc(i);
        //load Placeholder atlas record for this map
        //...
-       for j:=1 to maxz do PlaceholderAtlas[i].PlaceholderRND[j]:=1.0;
+       for j:=1 to maxz do PlaceholderAtlas^[i].PlaceholderRND[j]:=1.0;
        //if placeholderRND>0 then ...   // however that's not so trivial here as it was in tiles
        TmpRootNode:=Load3D(placeholders_models_folder+Rec.Name);
        Placeholders[i]:=TX3DRootNode.Create('','');
        AddChildRecoursive(Placeholders[i],TmpRootNode);
 
-       PlaceholderAtlas[i].PlaceholderName:=Rec.Name;
+       PlaceholderAtlas^[i].PlaceholderName:=Rec.Name;
        //else dec(i);
      until FindNext(Rec) <> 0;
    finally
@@ -387,7 +393,8 @@ begin
 
    //hardcode the atlas...
    //later it will be autoloaded
-    with PlaceholderCompatibility[1] do begin
+   new(PlaceholderCompatibility);
+    with PlaceholderCompatibility^[1] do begin
      placeholderName:='BookShelf';
      Compatibility_records:=3;
      for i:=1 to Compatibility_records do compatibility_RND[i]:=1;
@@ -395,26 +402,26 @@ begin
      compatibility_string[2]:='Furniture1_7_bookShelf2.x3d';
      compatibility_string[3]:='Furniture1_8_bookShelf3.x3d';
     end;
-    with PlaceholderCompatibility[2] do begin
+    with PlaceholderCompatibility^[2] do begin
      placeholderName:='RoundTableChairLayout';
      Compatibility_records:=1;
      for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
      compatibility_string[1]:='Furniture1_16_squaretablechairslayout.x3d';
     end;
-    with PlaceholderCompatibility[3] do begin
+    with PlaceholderCompatibility^[3] do begin
       placeholderName:='RoundTableLayout';
       Compatibility_records:=2;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
       compatibility_string[1]:='Furniture1_14_roundtablelayout2.x3d';
       compatibility_string[2]:='Furniture1_15_roundtablelayout.x3d';
     end;
-    with PlaceholderCompatibility[4] do begin
+    with PlaceholderCompatibility^[4] do begin
       placeholderName:='SquareTableChairLayout';
       Compatibility_records:=1;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
       compatibility_string[1]:='Furniture1_16_squaretablechairslayout.x3d';
     end;
-    with PlaceholderCompatibility[5] do begin
+    with PlaceholderCompatibility^[5] do begin
       placeholderName:='SquareTableLayout';
       Compatibility_records:=3;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
@@ -422,7 +429,7 @@ begin
       compatibility_string[2]:='Furniture1_18_squaretablelayout2.x3d';
       compatibility_string[3]:='Furniture1_19_squaretablelayout3.x3d';
     end;
-    with PlaceholderCompatibility[6] do begin
+    with PlaceholderCompatibility^[6] do begin
       placeholderName:='Chair';
       Compatibility_records:=3;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
@@ -430,32 +437,32 @@ begin
       compatibility_string[2]:='Furniture1_02_chair2.x3d';
       compatibility_string[3]:='Furniture1_03_chair3.x3d';
     end;
-    with PlaceholderCompatibility[7] do begin
+    with PlaceholderCompatibility^[7] do begin
       placeholderName:='book';
       Compatibility_records:=15;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
       for i:=1 to Compatibility_Records do compatibility_string[i]:='BookCovers_'+inttostr(i)+'.x3d';
     end;
-    with PlaceholderCompatibility[8] do begin
+    with PlaceholderCompatibility^[8] do begin
       placeholderName:='OpenBook';
       Compatibility_records:=23;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
       for i:=1 to Compatibility_Records do compatibility_string[i]:='BooksPages_'+inttostr(i)+'.x3d';
     end;
-    with PlaceholderCompatibility[9] do begin
+    with PlaceholderCompatibility^[9] do begin
       placeholderName:='BookCase';
       Compatibility_records:=1;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
       compatibility_string[1]:='Furniture1_04_bookCase.x3d';
     end;
-    with PlaceholderCompatibility[10] do begin
+    with PlaceholderCompatibility^[10] do begin
       placeholderName:='table';
       Compatibility_records:=2;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;
       compatibility_string[1]:='Furniture1_11_squaretable.x3d';
       compatibility_string[2]:='Furniture1_12_roundtable.x3d';
     end;
-    with PlaceholderCompatibility[11] do begin
+    with PlaceholderCompatibility^[11] do begin
       placeholderName:='Painting';
       Compatibility_records:=27;
       for i:=1 to Compatibility_Records do compatibility_RND[i]:=1;

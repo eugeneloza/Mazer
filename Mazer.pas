@@ -31,7 +31,7 @@ const show_map_boolean=false;
 const play_music=true;
 const loadscreenanimationspeed=12;
 
-const const_FPS_goal=70; //dynamic goal for FPS.
+const const_FPS_goal=30; //dynamic goal for FPS.
 
 //this thread will generate the map in the background
 type TGenerationThread = class(TThread)
@@ -104,6 +104,7 @@ var p0x:integer=-1;
 procedure ChunkManager(Container: TUIContainer);
 var i,j,px,py,pz:integer;
     GroupActive:array[1..MaxGroups]of boolean;
+    currentMaxNeighboursdiv10:integer;
 begin
  if not firstrender then begin
    px:=round((Player.position[0])/myscale/2);
@@ -117,7 +118,15 @@ begin
    if pz>maxz then pz:=maxz;
    if (p0x<>px) or (p0y<>py) or (p0z<>pz) then begin
       for j:=1 to n_groups do GroupActive[j]:=false;
-      for i:=1 to n_tiles do if Neighbours[px,py,pz][i]>0 then GroupActive[groups[i]]:=true;
+      {$Ifdef UseSwitches}
+      currentMaxNeighboursdiv10:=CurrentMaxNeighbours div 10;  //on slow PC this will cut off groups and tiles at non-zero visible angle to keep FPS up
+      for i:=0 to n_tiles do if Neighbours^[px,py,pz][i]>currentMaxNeighboursdiv10 then begin
+        if Neighbours^[px,py,pz][i]>CurrentMaxNeighbours then MapSwitches[i].WhichChoice:=0 else MapSwitches[i].WhichChoice:=1;
+        GroupActive[groups[i]]:=true;
+      end else MapSwitches[i].WhichChoice:=-1;
+      {$else}
+      for i:=0 to n_tiles do if Neighbours^[px,py,pz][i]>0 then GroupActive[groups[i]]:=true;
+      {$endif}
       {$ifdef TryCastleScenes}
         for j:=1 to n_groups do if GroupActive[j] then MapScenes[j].Exists:=true else MapScenes[j].Exists:=false;
       {$else}
@@ -158,6 +167,11 @@ begin
      inc(framecount);
      if (lasttime>0) and ((now-lasttime)>1/24/60/60) then begin
        label_FPS.text.text:=inttostr(framecount{round(1/(now-lasttime)/24/60/60)});
+       {$ifdef UseSwitches}
+       if (framecount<const_FPS_goal) and (CurrentMaxNeighbours<MaxNeighbours) then inc(CurrentMaxNeighbours,maxNeighbours div 10);
+       if (framecount>const_FPS_goal) and (CurrentMaxNeighbours>0) then dec(CurrentMaxNeighbours,maxNeighbours div 10);
+       Tile_label.Text.text:='MaxNeighbours = '+inttostr(CurrentMaxNeighbours)+'/'+inttostr(maxNeighbours);
+       {$endif}
        framecount:=0;
        lasttime:=now;
      end;
@@ -189,12 +203,12 @@ begin
      if pz>maxz then pz:=maxz;
      //set visible all tiles ajacent to the player
      set_vis(px,py,pz);
-     if (map[px,py,pz].faces[angle_left]<>face_wall) then set_vis(px-1,py,pz);
-     if (map[px,py,pz].faces[angle_right]<>face_wall) then set_vis(px+1,py,pz);
-     if (map[px,py,pz].faces[angle_top]<>face_wall) then set_vis(px,py-1,pz);
-     if (map[px,py,pz].faces[angle_bottom]<>face_wall) then set_vis(px,py+1,pz);
-     if (map[px,py,pz].floor[angle_stairs_up]<>floor_wall) then set_vis(px,py,pz-1);
-     if (map[px,py,pz].floor[angle_stairs_down]<>floor_wall) then set_vis(px,py,pz+1);
+     if (map^[px,py,pz].faces[angle_left]<>face_wall) then set_vis(px-1,py,pz);
+     if (map^[px,py,pz].faces[angle_right]<>face_wall) then set_vis(px+1,py,pz);
+     if (map^[px,py,pz].faces[angle_top]<>face_wall) then set_vis(px,py-1,pz);
+     if (map^[px,py,pz].faces[angle_bottom]<>face_wall) then set_vis(px,py+1,pz);
+     if (map^[px,py,pz].floor[angle_stairs_up]<>floor_wall) then set_vis(px,py,pz-1);
+     if (map^[px,py,pz].floor[angle_stairs_down]<>floor_wall) then set_vis(px,py,pz+1);
 
 {     PlayerTile:=MapTileIndex[px,py,pz];
      if playertile>0 then Tile_label.text.text:=(Tiles[GeneratorSteps[PlayerTile].Tile_Type].TileName)+' : ('+inttostr(px)+','+inttostr(py)+','+inttostr(pz)+')';}
@@ -469,6 +483,8 @@ begin
   {=== ........................ ===}
 
   writeln('freeing all ...');
+  dispose(Map);
+  dispose(Neighbours);
   //free everything unneeded.
 {  for i:=1 to maxTilesTypes do
    for j:=1 to maxtilesizez do if Tiles[i].Tile_PNG[j]<>nil then freeandnil(Tiles[i].Tile_PNG[j]);}

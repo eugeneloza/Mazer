@@ -30,9 +30,9 @@ const anisotropic_smoothing=4;        //rendering parameters for easy access
       Shadow_maps_enabled=false;
       Shadow_volumes_enabled=false;
 
-const maxmaxx=33;                      //max map size
-      maxmaxy=33;
-      maxmaxz=11;
+const maxmaxx=11;                      //max map size
+      maxmaxy=11;
+      maxmaxz=3;
       maxMapTiles=maxmaxx*maxmaxy*maxmaxz;      //map volume
       maxGroups=2*round(sqrt(MaxMapTiles))+1;
       maxMapPlaceholders=MaxMapTiles*30;

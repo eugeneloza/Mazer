@@ -39,16 +39,26 @@ type Generator_type = record
 end;
 
 type MapIntArray = array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of integer;
+type GeneratorStepsArray = array[0..maxMapTiles] of Generator_type;
+type MapArray =array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of Basic_Tile_Type;
+type NeighboursArray = array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of array [0..maxMapTiles] of integer;
 
 var n_tiles:integer;
 
-    MapTiles: array[1..maxMapTiles] of TTransformNode;
+    MapTiles: array of TTransformNode;
+    {$ifdef UseSwitches}
+    MapSwitches: array of TSwitchNode;
+    MapTilesLOD: array of TTransformNode;
+    MaxNeighbours, currentMaxNeighbours: integer;
+    {$else}
+    {$endif}
+    //TODO: dynamic array, however, I'm not yet sure, how to make it without resizing it at every placeholder add
     MapPlaceholders: array[1..maxMapPlaceholders] of TtransformNode;
-    mapElements,mapPlaceholderElements:integer;
+    mapPlaceholderElements:integer;
     //these are larger groups for tiles (to optimize FPS and other stuff)
     {$ifdef TryCastleScenes}
-    MapScenes: array[0..maxGroups] of TCastleScene;
-    MapRoots:array[0..maxGroups] of TX3DRootNode;
+    MapScenes: array of TCastleScene;
+    MapRoots:array of TX3DRootNode;
     {$else}
     MapGroups: array[1..maxGroups] of TStaticGroupNode;
     GroupsSwitches: array[1..maxGroups] of TSwitchNode;
@@ -59,19 +69,18 @@ var n_tiles:integer;
     Nav:TKambiNavigationInfoNode; /// !!!
     NavLight:TPointLightNode;
 
-    MapTileIndex:MapIntArray; //here we store all tiles numbers at specific xyz; used to quicken search for neighbours + debug TileLabel in-game
-    Neighbours: array [1..maxmaxx,1..maxmaxy,1..maxmaxz] of array [1..maxMapTiles] of integer; //this stores all neigbours with all 'distance' relation for LODs
-    groups: array [1..maxMapTiles] of integer;//stores group numbers for quick access
+    MapTileIndex:^MapIntArray; //here we store all tiles numbers at specific xyz; used to quicken search for neighbours + debug TileLabel in-game
+
+    //TODO: optimize memory usage. However these are TIME CRITICAL ARRAYS
+    Neighbours: ^NeighboursArray; //this stores all neigbours with all 'distance' relation for LODs
+    groups: array [0..maxMapTiles] of integer;//stores group numbers for quick access
     N_groups: integer;
 
-
-    Map: array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of Basic_Tile_Type;
-    GeneratorSteps: array[1..maxMapTiles] of Generator_type;
+    Map: ^MapArray;
+    GeneratorSteps: ^GeneratorStepsArray;
 
     MapArea,explored_area,deepest_level,max_distance:integer;
     startx,starty,startz:integer;
-
-    DistanceMap,olddistancemap:array[1..maxmaxx,1..maxmaxy,1..maxmaxz] of integer;
 
     RoseT:T3DTRansform;
     Rosex,Rosey,Rosez:integer;
@@ -93,7 +102,7 @@ function getMap(gx,gy,gz:integer):Basic_Tile_Type;
 begin
   if (gx>0)     and (gy>0)     and (gz>0) and
      (gx<=maxx) and (gy<=maxx) and (gz<=maxz) then
-    getMap:=Map[gx,gy,gz]
+    getMap:=Map^[gx,gy,gz]
   else
     GetMap.base:=tile_inacceptible;
 end;
@@ -170,19 +179,19 @@ begin
     for jx:=1 to tilesizex do
      for jy:=1 to tilesizey do
       for jz:=1 to tilesizez do begin
-        if TileMap[jx,jy,jz].base<>tile_na then Map[x+jx-1,y+jy-1,z+jz-1].base:=TileMap[jx,jy,jz].base;
+        if TileMap[jx,jy,jz].base<>tile_na then Map^[x+jx-1,y+jy-1,z+jz-1].base:=TileMap[jx,jy,jz].base;
         for jj:=0 to maxangles do
-          if TileMap[jx,jy,jz].faces[jj]<>tile_na then Map[x+jx-1,y+jy-1,z+jz-1].faces[jj]:=TileMap[jx,jy,jz].faces[jj];
+          if TileMap[jx,jy,jz].faces[jj]<>tile_na then Map^[x+jx-1,y+jy-1,z+jz-1].faces[jj]:=TileMap[jx,jy,jz].faces[jj];
         for jj:=1 to 2 do
-          if TileMap[jx,jy,jz].floor[jj]<>tile_na then Map[x+jx-1,y+jy-1,z+jz-1].floor[jj]:=TileMap[jx,jy,jz].floor[jj];
+          if TileMap[jx,jy,jz].floor[jj]<>tile_na then Map^[x+jx-1,y+jy-1,z+jz-1].floor[jj]:=TileMap[jx,jy,jz].floor[jj];
       end;
     // Prepare a Generator step for placing a tile
     // to create a 3D world later
     inc(n_tiles);
-    GeneratorSteps[n_tiles].Tile_Type:=inTileType;
-    GeneratorSteps[n_tiles].tx:=x;
-    GeneratorSteps[n_tiles].ty:=y;
-    GeneratorSteps[n_tiles].tz:=z;
+    GeneratorSteps^[n_tiles].Tile_Type:=inTileType;
+    GeneratorSteps^[n_tiles].tx:=x;
+    GeneratorSteps^[n_tiles].ty:=y;
+    GeneratorSteps^[n_tiles].tz:=z;
     PutTile:=true;
   end else PutTile:=false;
  end;
@@ -194,11 +203,11 @@ end;
 Procedure EraseMap;
 var i,ix,iy,iz:integer;
 begin
- n_tiles:=0;
+ n_tiles:=-1;
  //erase map;
  for ix:=1 to maxx do
   for iy:=1 to maxy do
-   for iz:=1 to maxz do with Map[ix,iy,iz] do begin
+   for iz:=1 to maxz do with Map^[ix,iy,iz] do begin
      base:=tile_na;
      for i:=0 to maxangles do faces[i]:=face_na;
      if ix=1 then faces[angle_left]:=face_wall;
@@ -241,7 +250,7 @@ begin
     for iy:=1 to maxy do
      for iz:=1 to maxz do begin
       for i:=0 to maxangles do begin
-        if (Map[ix,iy,iz].faces[i]>=face_free) and (getMap(ix+a_dx(i),iy+a_dy(i),iz).faces[inverseAngle(i)]=face_na) then begin
+        if (Map^[ix,iy,iz].faces[i]>=face_free) and (getMap(ix+a_dx(i),iy+a_dy(i),iz).faces[inverseAngle(i)]=face_na) then begin
           inc(FreeFaces);
           tx:=ix;   //store the latest face
           ty:=iy;
@@ -250,7 +259,7 @@ begin
           if tz>deepest_level then deepest_level:=tz;
         end;
       end;
-      if Map[ix,iy,iz].base>=tile_free then inc(MapArea);
+      if Map^[ix,iy,iz].base>=tile_free then inc(MapArea);
      end;
    If FreeFaces>0 then begin
      if FreeFaces>3 then begin
@@ -313,11 +322,11 @@ begin
        repeat
          tt:=round(random*(MaxTilesTypes-1))+1;
          if Tiles[tt].blocker then begin
-           if tiles[tt].TileMap[1,1,1].faces[inverseAngle(ta)]=Map[tx,ty,tz].faces[ta] then begin
+           if tiles[tt].TileMap[1,1,1].faces[inverseAngle(ta)]=Map^[tx,ty,tz].faces[ta] then begin
              flg:=PutTile(tt,tx+a_dx(ta),ty+a_dy(ta),tz);
              if flg then begin
-               Map[tx,ty,tz].faces[ta]:=face_wall;
-               Map[tx+a_dx(ta),ty+a_dy(ta),tz].faces[inverseAngle(ta)]:=face_wall;
+               Map^[tx,ty,tz].faces[ta]:=face_wall;
+               Map^[tx+a_dx(ta),ty+a_dy(ta),tz].faces[inverseAngle(ta)]:=face_wall;
              end;
            end;
          end;
@@ -334,48 +343,53 @@ Procedure CreateDistanceMap;
 var i,ix,iy,iz:integer;
     tx,ty,tz:integer;
     flg:boolean;
+    DistanceMap,olddistancemap:^MapIntArray; //memoptimize
 begin
+New(DistanceMap);
+New(OlddistanceMap);
  //create distance map; basic for pathfinding
  // now only used to place a rose at the most distant place of the map
  for ix:=1 to maxx do
   for iy:=1 to maxy do
-   for iz:=1 to maxz do distanceMap[ix,iy,iz]:=-1;
- distanceMap[startx,starty,startz]:=0;
+   for iz:=1 to maxz do distanceMap^[ix,iy,iz]:=-1;
+ distanceMap^[startx,starty,startz]:=0;
  repeat
    flg:=true;
-   olddistancemap:=distancemap;
+   olddistancemap^:=distancemap^;
    for ix:=1 to maxx do
     for iy:=1 to maxy do
-     for iz:=1 to maxz do if {((Map[ix,iy,iz].base=tile_free) or (Map[ix,iy,iz].base=tile_stairs_up) or (Map[ix,iy,iz].base=tile_stairs_down)) and} (olddistanceMap[ix,iy,iz]>-1) then begin
-       for i:=0 to maxAngles do if (Map[ix,iy,iz].faces[i]<>face_wall) then
+     for iz:=1 to maxz do if {((Map[ix,iy,iz].base=tile_free) or (Map[ix,iy,iz].base=tile_stairs_up) or (Map[ix,iy,iz].base=tile_stairs_down)) and} (olddistanceMap^[ix,iy,iz]>-1) then begin
+       for i:=0 to maxAngles do if (Map^[ix,iy,iz].faces[i]<>face_wall) then
          if (ix+a_dx(i)>0) and (ix+a_dx(i)<=maxx) and (iy+a_dy(i)>0) and (iy+a_dy(i)<=maxy) then
-           if (distancemap[ix+a_dx(i),iy+a_dy(i),iz]=-1) then begin
-             distancemap[ix+a_dx(i),iy+a_dy(i),iz]:=olddistanceMap[ix,iy,iz]+1;
+           if (distancemap^[ix+a_dx(i),iy+a_dy(i),iz]=-1) then begin
+             distancemap^[ix+a_dx(i),iy+a_dy(i),iz]:=olddistanceMap^[ix,iy,iz]+1;
              flg:=false;
            end;
-       if (Map[ix,iy,iz].base=tile_stairs_up) then
-         if distancemap[ix,iy,iz-1]=-1 then begin
-           distancemap[ix,iy,iz-1]:=olddistanceMap[ix,iy,iz]+1;
+       if (Map^[ix,iy,iz].base=tile_stairs_up) then
+         if distancemap^[ix,iy,iz-1]=-1 then begin
+           distancemap^[ix,iy,iz-1]:=olddistanceMap^[ix,iy,iz]+1;
            flg:=false;
          end;
-       if (Map[ix,iy,iz].base=tile_stairs_down) then
-         if distancemap[ix,iy,iz+1]=-1 then begin
-           distancemap[ix,iy,iz+1]:=olddistanceMap[ix,iy,iz]+1;
+       if (Map^[ix,iy,iz].base=tile_stairs_down) then
+         if distancemap^[ix,iy,iz+1]=-1 then begin
+           distancemap^[ix,iy,iz+1]:=olddistanceMap^[ix,iy,iz]+1;
            flg:=false;
          end;
      end;
  until flg;
+ dispose(OlddistanceMap);
 
  //now find the max distance
 max_distance:=0;
 for ix:=1 to maxx do
 for iy:=1 to maxy do
- for iz:=1 to maxz do if (distanceMap[ix,iy,iz]>max_distance) then begin
+ for iz:=1 to maxz do if (distanceMap^[ix,iy,iz]>max_distance) then begin
    tx:=ix;
    ty:=iy;
    tz:=iz;
-   max_Distance:=distanceMap[ix,iy,iz];
+   max_Distance:=distanceMap^[ix,iy,iz];
  end;
+dispose(DistanceMap);
 
 {if tx=0 then begin}
   Rosex:=tx;
@@ -404,29 +418,29 @@ begin
     minimap[iz].setsize((maxx)*16,(maxy)*16,1);
     minimap[iz].Clear(Vector4Byte(0,0,0,0));
 //    writeln('drawing '+inttostr(iz));
-    for i:=1 to n_tiles do with Tiles[GeneratorSteps[i].Tile_Type] do
+    for i:=0 to n_tiles do with Tiles[GeneratorSteps^[i].Tile_Type] do
      for j:=1 to tilesizez do
-       if GeneratorSteps[i].tz+j-1=iz then begin
+       if GeneratorSteps^[i].tz+j-1=iz then begin
          if Tile_PNG[j]<>nil then
            try
-             //writeln('draw: '+inttostr(GeneratorSteps[i].Tile_Type));
+             //writeln('draw: '+inttostr(GeneratorSteps^[i].Tile_Type));
              //!!!
-             if Tiles[GeneratorSteps[i].Tile_Type].TileName='library4_20_R.x3d' then writeln('drawing library4_20_R.x3d');
-             //if (GeneratorSteps[i].Tile_Type<16) or (GeneratorSteps[i].Tile_Type=20) then
+             if Tiles[GeneratorSteps^[i].Tile_Type].TileName='library4_20_R.x3d' then writeln('drawing library4_20_R.x3d');
+             //if (GeneratorSteps^[i].Tile_Type<16) or (GeneratorSteps^[i].Tile_Type=20) then
              if not blocker then
-               Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps[i].tx-1)*16,(maxy-GeneratorSteps[i].ty-tilesizey+1)*16,dmBlendSmart)
+               Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps^[i].tx-1)*16,(maxy-GeneratorSteps^[i].ty-tilesizey+1)*16,dmBlendSmart)
              else begin
-               if Tiles[GeneratorSteps[i].Tile_Type].TileMap[1,1,1].faces[angle_top]>=face_free then
-                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps[i].tx-1)*16,(maxy-GeneratorSteps[i].ty-tilesizey+1+1)*16,dmBlendSmart)
+               if Tiles[GeneratorSteps^[i].Tile_Type].TileMap[1,1,1].faces[angle_top]>=face_free then
+                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps^[i].tx-1)*16,(maxy-GeneratorSteps^[i].ty-tilesizey+1+1)*16,dmBlendSmart)
                else
-               if Tiles[GeneratorSteps[i].Tile_Type].TileMap[1,1,1].faces[angle_bottom]>=face_free then
-                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps[i].tx-1)*16,(maxy-GeneratorSteps[i].ty-tilesizey+1-1)*16,dmBlendSmart)
+               if Tiles[GeneratorSteps^[i].Tile_Type].TileMap[1,1,1].faces[angle_bottom]>=face_free then
+                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps^[i].tx-1)*16,(maxy-GeneratorSteps^[i].ty-tilesizey+1-1)*16,dmBlendSmart)
                else
-               if Tiles[GeneratorSteps[i].Tile_Type].TileMap[1,1,1].faces[angle_left]>=face_free then
-                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps[i].tx-1-1)*16,(maxy-GeneratorSteps[i].ty-tilesizey+1)*16,dmBlendSmart)
+               if Tiles[GeneratorSteps^[i].Tile_Type].TileMap[1,1,1].faces[angle_left]>=face_free then
+                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps^[i].tx-1-1)*16,(maxy-GeneratorSteps^[i].ty-tilesizey+1)*16,dmBlendSmart)
                else
-               if Tiles[GeneratorSteps[i].Tile_Type].TileMap[1,1,1].faces[angle_right]>=face_free then
-                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps[i].tx-1+1)*16,(maxy-GeneratorSteps[i].ty-tilesizey+1)*16,dmBlendSmart)
+               if Tiles[GeneratorSteps^[i].Tile_Type].TileMap[1,1,1].faces[angle_right]>=face_free then
+                 Tile_PNG[j].DrawTo(Minimap[iz],(GeneratorSteps^[i].tx-1+1)*16,(maxy-GeneratorSteps^[i].ty-tilesizey+1)*16,dmBlendSmart)
              end;
            except
              writeln(Tile_PNG[j].width,'x',Tile_PNG[j].height,' - ',Tile_PNG[j].classname,' vs ',Minimap[iz].classname);
@@ -452,26 +466,29 @@ var i,j,ix,iy,iz:integer;
     flg:boolean;
     startRaycastTime:TDateTime;
 
-    Tiles_count:array[1..maxMapTiles]of integer;
+    Tiles_count:array[0..maxMapTiles]of integer;
     max_tiles_count,max_tile_pos:integer;
     debug_group_size:integer;
 begin
  StartRaycastTime:=now;
  writeln('raycasting...');
+ new(MapTileIndex);
+ new(Neighbours);
+
  //clear neighbours and MapTileIndex
  for ix:=1 to maxx do
   for iy:=1 to maxy do
    for iz:=1 to maxz do begin
-     MapTileIndex[ix,iy,iz]:=-1;
-     for i:=1 to n_tiles do Neighbours[ix,iy,iz][i]:=0;
+     MapTileIndex^[ix,iy,iz]:=-1;
+     for i:=0 to n_tiles do Neighbours^[ix,iy,iz][i]:=0;
    end;
 
  //Fill MapTileIndex for quick access here and in-game
- for i:=1 to n_tiles do if not Tiles[GeneratorSteps[i].tile_type].blocker then with Tiles[GeneratorSteps[i].Tile_type] do
+ for i:=0 to n_tiles do if not Tiles[GeneratorSteps^[i].tile_type].blocker then with Tiles[GeneratorSteps^[i].Tile_type] do
    for ix:=1 to tilesizex do
     for iy:=1 to tilesizey do
      for iz:=1 to tilesizez do if TileMap[ix,iy,iz].base<>tile_na then
-       MapTileIndex[GeneratorSteps[i].tx+ix-1,GeneratorSteps[i].ty+iy-1,GeneratorSteps[i].tz+iz-1]:=i;
+       MapTileIndex^[GeneratorSteps^[i].tx+ix-1,GeneratorSteps^[i].ty+iy-1,GeneratorSteps^[i].tz+iz-1]:=i;
 
  {the following raycasting algorithm is extremely inefficient...
  However, I found no easy way to improve it significantly without missing any tiles and its better to spend more time now but provide for better visual and higher FPS
@@ -483,7 +500,7 @@ begin
  d_alpha:=1/sqrt(sqr(maxx)+sqr(maxy)+sqr(maxz))*2;
  for iz:=1 to maxz do begin
   for ix:=1 to maxx do
-   for iy:=1 to maxy do if MapTileIndex[ix,iy,iz]>0 then
+   for iy:=1 to maxy do if MapTileIndex^[ix,iy,iz]>=0 then
 
      for dx:=0 to 1 do
       for dy:=0 to 1 do
@@ -522,19 +539,19 @@ begin
                yy:=trunc(y1);
                zz:=trunc(z1);
                if (xx<>xx0) or (yy<>yy0) or (zz<>zz0) then begin
-                if MapTileIndex[xx0,yy0,zz0]=-1 then flg:=true else begin
-                 inc(Neighbours[ix,iy,iz][MapTileIndex[xx0,yy0,zz0]]);
+                if MapTileIndex^[xx0,yy0,zz0]=-1 then flg:=true else begin
+                 inc(Neighbours^[ix,iy,iz][MapTileIndex^[xx0,yy0,zz0]]);
                  if (xx<>xx0) then begin
-                   if (xx>xx0) and (Map[xx0,yy0,zz0].faces[angle_right]=face_wall) then flg:=true;
-                   if (xx<xx0) and (Map[xx0,yy0,zz0].faces[angle_left]=face_wall) then flg:=true;
+                   if (xx>xx0) and (Map^[xx0,yy0,zz0].faces[angle_right]=face_wall) then flg:=true;
+                   if (xx<xx0) and (Map^[xx0,yy0,zz0].faces[angle_left]=face_wall) then flg:=true;
                  end;
                  if (yy<>yy0) then begin
-                   if (yy>yy0) and (Map[xx0,yy0,zz0].faces[angle_bottom]=face_wall) then flg:=true;
-                   if (yy<yy0) and (Map[xx0,yy0,zz0].faces[angle_top]=face_wall) then flg:=true;
+                   if (yy>yy0) and (Map^[xx0,yy0,zz0].faces[angle_bottom]=face_wall) then flg:=true;
+                   if (yy<yy0) and (Map^[xx0,yy0,zz0].faces[angle_top]=face_wall) then flg:=true;
                  end;
                  if (zz<>zz0) then begin
-                   if (zz>zz0) and (Map[xx0,yy0,zz0].floor[angle_stairs_down]=floor_wall) then flg:=true;
-                   if (zz<zz0) and (Map[xx0,yy0,zz0].floor[angle_stairs_up]=floor_wall) then flg:=true;
+                   if (zz>zz0) and (Map^[xx0,yy0,zz0].floor[angle_stairs_down]=floor_wall) then flg:=true;
+                   if (zz<zz0) and (Map^[xx0,yy0,zz0].floor[angle_stairs_up]=floor_wall) then flg:=true;
                  end;
                 end;
                end;
@@ -549,20 +566,32 @@ begin
    writeln('raycasting ',100*iz div maxz,'%');
    end;
   {one more thing left to do - check for blockers because they are not included in MapTileIndex!}
-  for i:=1 to n_tiles do if Tiles[GeneratorSteps[i].tile_type].blocker then begin
-    xx:=GeneratorSteps[i].tx;
-    yy:=GeneratorSteps[i].ty;
-    zz:=GeneratorSteps[i].tz;
+  for i:=0 to n_tiles do if Tiles[GeneratorSteps^[i].tile_type].blocker then begin
+    xx:=GeneratorSteps^[i].tx;
+    yy:=GeneratorSteps^[i].ty;
+    zz:=GeneratorSteps^[i].tz;
     j:=-1;
     repeat
       inc(j);
-    until (Tiles[GeneratorSteps[i].tile_type].TileMap[1,1,1].faces[j]>=face_free) or (j>=MaxAngles);
+    until (Tiles[GeneratorSteps^[i].tile_type].TileMap[1,1,1].faces[j]>=face_free) or (j>=MaxAngles);
     for ix:=1 to maxx do
      for iy:=1 to maxy do
       for iz:=1 to maxz do
-       Neighbours[ix,iy,iz][i]:=Neighbours[ix,iy,iz][MapTileIndex[xx+a_dx(j),yy+a_dy(j),zz]];
+       Neighbours^[ix,iy,iz][i]:=Neighbours^[ix,iy,iz][MapTileIndex^[xx+a_dx(j),yy+a_dy(j),zz]];
   end;
   writeln('Raycasting done in ',trunc((now-StartRayCastTime)*24*60),' min ',round((now-StartRayCastTime)*24*60*60-trunc((now-StartRayCastTime)*24*60)*60),' s');
+
+  {and one more thing... calculate basic neighbours
+  These coefficients allow replace distant tiles for LODs (currently just tiles without placeholders) to improve FPS.
+  Neighbours_limit causes almost no artefacts at current tileset. Only occasional glitches at stairs.
+  Neighbours_limit_max is heavy on artefacts and practically is the largest rational value possible
+  For some stupid reason I can't estimate it approximately correctly :(}
+  MaxNeighbours:=maxint;   //well... practically we seek the lowest value, representing 1x1 tiles as larger tiles are non-linearly multiplied by that
+  for i:=1 to n_tiles do if not Tiles[generatorsteps^[i].tile_type].blocker then
+    if (Neighbours^[generatorsteps^[i].tx,generatorsteps^[i].ty,generatorsteps^[i].tz][i]>0) and (MaxNeighbours>Neighbours^[generatorsteps^[i].tx,generatorsteps^[i].ty,generatorsteps^[i].tz][i]) then MaxNeighbours:=Neighbours^[generatorsteps^[i].tx,generatorsteps^[i].ty,generatorsteps^[i].tz][i];
+  writeln('Basic_Neighbours_Value ',MaxNeighbours);
+  MaxNeighbours:=round(100*sqrt(MaxNeighbours/4000));
+  CurrentMaxNeighbours:=MaxNeighbours div 10;
 
   {this part of the code will combine tiles in larger groups to boost FPS
   also this will provide for LOD of the whole group generation and far land support for overworld later
@@ -570,17 +599,17 @@ begin
   writeln('Preparing TGroupNodes...');
   {first we just count how much time a tile is 'hit' by neighbours
   Therefore we find "more popular" tiles which will be 'seeds' for our groups}
-  for i:=1 to n_tiles do tiles_count[i]:=0;
+  for i:=0 to n_tiles do tiles_count[i]:=0;
   for ix:=1 to maxx do
    for iy:=1 to maxy do
     for iz:=1 to maxz do
-     for i:=1 to n_tiles do if Neighbours[ix,iy,iz][i]>0 then inc(Tiles_count[i]);
+     for i:=0 to n_tiles do if Neighbours^[ix,iy,iz][i]>0 then inc(Tiles_count[i]);
   {now let's start the main algorithm}
   N_groups:=0;
   repeat
     //let's find next 'max' node position and start grouping from it
     Max_Tiles_Count:=0;
-    for i:=1 to n_tiles do if max_Tiles_Count<tiles_count[i] then begin
+    for i:=0 to n_tiles do if max_Tiles_Count<tiles_count[i] then begin
       max_Tiles_Count:=Tiles_count[i];
       max_Tile_pos:=i;
     end;
@@ -589,10 +618,10 @@ begin
       inc(n_groups);
       debug_group_size:=0;
       //scan max_tile_pos tile and mark all its neighbours as a group
-      for dx:=0 to Tiles[GeneratorSteps[max_Tile_pos].Tile_Type].tilesizex-1 do
-       for dy:=0 to Tiles[GeneratorSteps[max_Tile_pos].Tile_Type].tilesizey-1 do
-        for dz:=0 to Tiles[GeneratorSteps[max_Tile_pos].Tile_Type].tilesizez-1 do
-         for i:=1 to n_tiles do if (Neighbours[GeneratorSteps[max_Tile_pos].tx+dx,GeneratorSteps[max_Tile_pos].ty+dy,GeneratorSteps[max_Tile_pos].tz+dz][i]>0) and (Tiles_count[i]>0) then begin
+      for dx:=0 to Tiles[GeneratorSteps^[max_Tile_pos].Tile_Type].tilesizex-1 do
+       for dy:=0 to Tiles[GeneratorSteps^[max_Tile_pos].Tile_Type].tilesizey-1 do
+        for dz:=0 to Tiles[GeneratorSteps^[max_Tile_pos].Tile_Type].tilesizez-1 do
+         for i:=0 to n_tiles do if (Neighbours^[GeneratorSteps^[max_Tile_pos].tx+dx,GeneratorSteps^[max_Tile_pos].ty+dy,GeneratorSteps^[max_Tile_pos].tz+dz][i]>0) and (Tiles_count[i]>0) then begin
            Tiles_count[i]:=-1;     //don't add this tile to another group
            groups[i]:=n_groups; //add this tile to this group
            inc(debug_group_size);
@@ -628,7 +657,7 @@ begin
    flg:=false;
    repeat
      inc(m);
-     if PlaceholderCompatibility[m].PlaceholderName=ThisPlaceHolderStyle.PlaceholderName then flg:=true;
+     if PlaceholderCompatibility^[m].PlaceholderName=ThisPlaceHolderStyle.PlaceholderName then flg:=true;
    until (flg) or (m=MaxPlaceholderAtlas);
    if not flg then begin
      //I think something better should be here
@@ -641,17 +670,17 @@ begin
      //those records are located in PlaceHolderAtlas array
      k:=trunc(random*MaxPlaceholderTypes)+1; if k>MaxPlaceHolderTypes then k:=MaxPlaceHolderTypes;
      //first we check the selected k-th placeholder against it's 'wieght'.
-     if random<PlaceHolderAtlas[k].PlaceholderRND[1] then begin //todo:different weights at different z
+     if random<PlaceHolderAtlas^[k].PlaceholderRND[1] then begin //todo:different weights at different z
        //now cycle through all m-th placeholder compatibility array to check if k-th placeholder replacer is compatible with it
        q:=0;
        flg:=false;
        repeat
          inc(q);
-         if PlaceholderCompatibility[m].compatibility_string[q]=PlaceHolderAtlas[k].PlaceholderName then flg:=true;
-       until (flg) or (q>=PlaceholderCompatibility[m].Compatibility_records);
+         if PlaceholderCompatibility^[m].compatibility_string[q]=PlaceHolderAtlas^[k].PlaceholderName then flg:=true;
+       until (flg) or (q>=PlaceholderCompatibility^[m].Compatibility_records);
        //if such record is found then ThisPlaceHolder is set to k. We've found a proper replacement for the placeholder.
        if flg then
-         if random<PlaceholderCompatibility[m].compatibility_RND[q] then begin
+         if random<PlaceholderCompatibility^[m].compatibility_RND[q] then begin
            ThisPlaceHolder:=k;
 //           writeln('select ',PlaceholderCompatibility[m].placeholderName, ' to ',thisplaceholder,' ',PlaceHolderAtlas[k].PlaceholderName);
          end;
@@ -708,20 +737,23 @@ begin
  GetNeighbours;
 // First, we construct MapTiles[i] array of map tiles together with all static items & placeholders
 // note: now mapelements=n_tiles, but this might change in future, so, I'd like to keep those separated
- mapElements:=0;
  mapPlaceholderElements:=0;
- for i:=1 to n_tiles do begin
-   inc(mapElements);
-   MapTiles[mapElements]:=TTransformNode.Create('','');
-   MapTiles[mapElements].translation:=Vector3Single(2*myscale*(GeneratorSteps[i].tx),-2*myscale*(GeneratorSteps[i].ty),-2*myscale*(GeneratorSteps[i].tz));
-   MapTiles[mapElements].scale:=Vector3Single(myscale,myscale,myscale);
-   for j:=0 to Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren.Count-1 do if Tiles[GeneratorSteps[i].Tile_type].Tile3d.fdChildren[j] is TTransformNode then begin
+ SetLength(MapTiles,n_tiles+1);
+ {$Ifdef UseSwitches}SetLength(MapTilesLOD,n_tiles+1);{$endif}
+ for i:=0 to n_tiles do begin
+   MapTiles[i]:=TTransformNode.Create('','');
+   MapTiles[i].translation:=Vector3Single(2*myscale*(GeneratorSteps^[i].tx),-2*myscale*(GeneratorSteps^[i].ty),-2*myscale*(GeneratorSteps^[i].tz));
+   MapTiles[i].scale:=Vector3Single(myscale,myscale,myscale);
+   {$Ifdef UseSwitches}MapTilesLOD[i]:=MapTiles[i].DeepCopy as TTRansformNode;{$endif}
+   for j:=0 to Tiles[GeneratorSteps^[i].Tile_type].Tile3d.FdChildren.Count-1 do if Tiles[GeneratorSteps^[i].Tile_type].Tile3d.fdChildren[j] is TTransformNode then begin
      //if this is a placeholder, then some work is needed t
      //else no work, just add the tile element to the 'MapTiles[i]'
-     if copy(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j].NodeName,1,1)='(' then begin
-       AddPlaceHolderRecoursive(MapTiles[mapElements]{ContainerObject},Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j] as TTransformNode{ParentObject});
-     end else
-       MapTiles[mapElements].FdChildren.add(Tiles[GeneratorSteps[i].Tile_type].Tile3d.FdChildren[j]);
+     if copy(Tiles[GeneratorSteps^[i].Tile_type].Tile3d.FdChildren[j].NodeName,1,1)='(' then begin
+       AddPlaceHolderRecoursive(MapTiles[i]{ContainerObject},Tiles[GeneratorSteps^[i].Tile_type].Tile3d.FdChildren[j] as TTransformNode{ParentObject});
+     end else begin
+       MapTiles[i].FdChildren.add(Tiles[GeneratorSteps^[i].Tile_type].Tile3d.FdChildren[j]);
+      {$Ifdef UseSwitches}MapTilesLOD[i].FdChildren.add(Tiles[GeneratorSteps^[i].Tile_type].Tile3d.FdChildren[j]);{$endif}
+     end;
    end;
  end;
 
@@ -730,13 +762,29 @@ begin
 //THEN GAME WILL REMOVE THE UNNEEDED CHUNKS AT FIRST RENDER
 //Doesn't work now...
 
+{$IfDef UseSwitches}
+  SetLength(MapSwitches,n_tiles+1);
+  for i:=0 to N_tiles do begin
+    MapSwitches[i]:=TSwitchNode.create('','');
+    MapSwitches[i].FdChildren.add(MapTiles[i]);
+    MapSwitches[i].FdChildren.add(MapTilesLOD[i]);
+    MapSwitches[i].WhichChoice:=0;
+  end;
+{$EndIf}
+
+SetLength(MapRoots,N_Groups+1);
 {$ifdef TryCastleScenes}
 for i:=1 to N_groups do MapRoots[i] := TX3DRootNode.Create('', '');
-for i:=1 to N_tiles do MapRoots[groups[i]].FdChildren.Add(MapTiles[i]);
+for i:=0 to N_tiles do
+  {$ifdef UseSwitches}
+  MapRoots[groups[i]].FdChildren.Add(MapSwitches[i]);
+  {$else}
+  MapRoots[groups[i]].FdChildren.Add(MapTiles[i]);
+  {$endif}
 {$else}
 MapGroups: array[1..maxGroups] of TStaticGroupNode;
 for i:=1 to N_groups do MapGroups[i]:=TStaticGroupNode.Create('','');
- for i:=1 to N_tiles do MapGroups[groups[i]].FdChildren.Add(MapTiles[i]);
+ for i:=0 to N_tiles do MapGroups[groups[i]].FdChildren.Add(MapTiles[i]);
 
  MainRoot := TX3DRootNode.Create('', '');
  for i:=1 to N_groups do begin
@@ -769,6 +817,7 @@ MainRoot.FdChildren.add(nav);
 
 //finally add everything to the scene.
 {$ifdef TryCastleScenes}
+SetLength(MapScenes,N_Groups+1);
 for i:=0 to N_groups do begin
   MapScenes[i]:=TCastleScene.Create(Window.Scenemanager);
   MapScenes[i].ShadowMaps:=Shadow_maps_enabled;  {?????}
@@ -789,6 +838,9 @@ Window.SceneManager.mainScene:=MainScene;
 {$endif}
 Window.Scenemanager.ShadowVolumes:=true; {?????}
 Window.SceneManager.ShadowVolumesRender:=true; {?????}
+
+dispose(PlaceholderAtlas);
+dispose(PlaceholderCompatibility);
 end;
 
 {=====================================================================}
@@ -800,6 +852,8 @@ var timestamp:TDateTime;
 begin
   TimeStamp:=now;
 
+  new(Map);
+  new(GeneratorSteps);
   Repeat
     LastTimeStamp:=now;
     randomize;
@@ -812,11 +866,12 @@ begin
 
     CreateMap;
 
-
     writeln('Map created in ',round((now-LastTimeStamp)*24*60*60*1000),'ms');
     if not ((Target_Map_Area-MapArea)/Target_Map_Area<allow_error) then writeln('Target failed by more than ',round(allow_error*100),'%. Re-generating map... (',MapArea,'/',Target_Map_Area,')');
     if not (deepest_Level=maxz) then writeln('Not all levels of the dungeons used. Re-generating map...');
   until (((Target_Map_Area-MapArea)/Target_Map_Area<allow_error) and (deepest_Level=maxz)) or (random<0.01);
+
+  dispose(TileAtlas); //this one is no longer needed as soon as we've generated the basic map.
 
   writeln('Job finished in ',round((now-timestamp)*24*60*60),'s');
 
@@ -826,6 +881,7 @@ begin
   writeln('making scene');
   MakeScene;
   writeln('create distance map');
+
 
   CreateDistanceMap;
 
@@ -837,7 +893,10 @@ begin
    RoseT.translation:=Vector3Single(2*myscale*(Rosex),-2*myscale*(Rosey),-2*myscale*(Rosez));
    //todo: this is an ugly fix for brick pass tileset being 0.5 tile 'higher' than others
    //I'm not yet sure how to work on 'floor height' for dynamic placeholders/items but it's not urgent.
-   if copy(Tiles[GeneratorSteps[MapTileIndex[Rosex,Rosey,Rosez]].Tile_Type].TileName,1,5)='Brick' then RoseT.translation:=Vector3Single(2*myscale*(Rosex),-2*myscale*(Rosey),-2*myscale*(Rosez-0.25));
+   if copy(Tiles[GeneratorSteps^[MapTileIndex^[Rosex,Rosey,Rosez]].Tile_Type].TileName,1,5)='Brick' then RoseT.translation:=Vector3Single(2*myscale*(Rosex),-2*myscale*(Rosey),-2*myscale*(Rosez-0.25));
+
+   dispose(GeneratorSteps); //!!! If not needed later for debugging
+   dispose(MapTileIndex);//PS we might need that for debugging...
 
    RoseT.scale:=Vector3Single(myscale,myscale,myscale);
    Window.Scenemanager.items.add(RoseT);
@@ -851,7 +910,7 @@ begin
    writeln('Map Area = '+inttostr(MapArea)+'/'+inttostr(Target_Map_Area));
    if MapArea<Target_Map_Area then writeln('Target failed by '+inttostr(round((Target_Map_Area-MapArea)/Target_Map_Area*100))+'%') else
                                    writeln('Target met with excess of '+inttostr(round((MapArea-Target_Map_Area)/Target_Map_Area*100))+'%');
-   writeln('Tiles = '+inttostr(n_tiles));
+   writeln('Tiles = '+inttostr(n_tiles+1));
    writeln('Deepest level = '+inttostr(Deepest_level)+'/'+inttostr(Maxz));
    writeln('Max distance = '+inttostr(Max_distance));
 end;

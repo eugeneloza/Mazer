@@ -53,9 +53,11 @@
             </Debugging>
           </Linking>
           <Other>
-            <CustomOptions Value="-dTryCastleScenes"/>
-            <OtherDefines Count="1">
+            <CustomOptions Value="-dTryCastleScenes
+-dUseSwitches"/>
+            <OtherDefines Count="2">
               <Define0 Value="TryCastleScenes"/>
+              <Define1 Value="UseSwitches"/>
             </OtherDefines>
           </Other>
         </CompilerOptions>
