@@ -69,6 +69,7 @@ var
   loadscreen_img: TCastleImageControl;
   Loadscreen_label: TCastleLabel;
   GenerationThread:TGenerationThread; //thread for generating the dungeon in background
+  GenerationThreadFinishExecute: boolean;
 
 {==========================================================================}
 {============================ PROCEDURES ==================================}
@@ -314,12 +315,7 @@ begin
  writeln('Generating Map...');
  GenerateMap;  //generate the map;
 
- //final initializations
- window.Controls.Remove(loadscreen_img);
- window.Controls.Remove(loadscreen_label);
- Window.scenemanager.camera:=player.camera;
-
- GameMode:=GameMode_game;
+ GenerationThreadFinishExecute := true;
 end;
 
 {---------------}
@@ -389,6 +385,18 @@ begin
 
   if gamemode=gamemode_loadscreen then window.DoRender;
   if gamemode=gamemode_game then application.TimerMilisec:=1000; //reset timer back to 1s in-game, it was 60fps for loading screen
+
+  if GenerationThreadFinishExecute then
+  begin
+    //final initializations
+    window.Controls.Remove(loadscreen_img);
+    window.Controls.Remove(loadscreen_label);
+    Window.scenemanager.camera:=player.camera;
+
+    GameMode:=GameMode_game;
+
+    GenerationThreadFinishExecute := false;
+  end;
 end;
 
 {==========================================================================}
