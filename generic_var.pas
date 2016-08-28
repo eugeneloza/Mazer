@@ -25,16 +25,16 @@ uses
   Classes, SysUtils,
   CastleWindow;
 
-const anisotropic_smoothing=4;        //rendering parameters for easy access
+const anisotropic_smoothing=8;        //rendering parameters for easy access
       Normal_map_enabled=false;
-      Shadow_maps_enabled=false;
-      Shadow_volumes_enabled=false;
+      Shadow_maps_enabled=true;
+      Shadow_volumes_enabled=true;
 
-const maxmaxx=11;                      //max map size
-      maxmaxy=11;
+const maxmaxx=15;                      //max map size
+      maxmaxy=15;
       maxmaxz=3;
       maxMapTiles=maxmaxx*maxmaxy*maxmaxz;      //map volume
-      maxGroups=2*round(sqrt(MaxMapTiles))+1;
+      maxGroups=maxMapTiles div 2;
       maxMapPlaceholders=MaxMapTiles*30;
 
 const maxMaxPlaceholdersTypes=130;     //for static arrays size

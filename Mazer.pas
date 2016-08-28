@@ -29,7 +29,7 @@ uses
 
 const show_map_boolean=false;
 const play_music=true;
-const loadscreenanimationspeed=12;
+const loadscreenanimationspeed=12; //px per second
 
 const const_FPS_goal=30; //dynamic goal for FPS.
 
@@ -69,7 +69,7 @@ var
   loadscreen_img: TCastleImageControl;
   Loadscreen_label: TCastleLabel;
   GenerationThread:TGenerationThread; //thread for generating the dungeon in background
-  GenerationThreadFinishExecute: boolean;
+  GenerationThreadFinishExecute: boolean=false;
 
 {==========================================================================}
 {============================ PROCEDURES ==================================}
@@ -316,6 +316,8 @@ begin
  GenerateMap;  //generate the map;
 
  GenerationThreadFinishExecute := true;
+
+ GameMode:=GameMode_game;
 end;
 
 {---------------}
@@ -383,20 +385,19 @@ begin
     MusicReady:=false;
   end;
 
-  if gamemode=gamemode_loadscreen then window.DoRender;
+  if gamemode=gamemode_loadscreen then  if loadscreen_IMG<>nil then loadscreen_IMG.ImageChanged;
   if gamemode=gamemode_game then application.TimerMilisec:=1000; //reset timer back to 1s in-game, it was 60fps for loading screen
-
   if GenerationThreadFinishExecute then
-  begin
-    //final initializations
-    window.Controls.Remove(loadscreen_img);
-    window.Controls.Remove(loadscreen_label);
-    Window.scenemanager.camera:=player.camera;
+    begin
+      //final initializations
+      window.Controls.Remove(loadscreen_img);
+      window.Controls.Remove(loadscreen_label);
+      Window.scenemanager.camera:=player.camera;
 
-    GameMode:=GameMode_game;
+      GameMode:=GameMode_game;
 
-    GenerationThreadFinishExecute := false;
-  end;
+      GenerationThreadFinishExecute := false;
+    end;
 end;
 
 {==========================================================================}

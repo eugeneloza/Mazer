@@ -24,6 +24,7 @@ uses
   castle_base, CastleWindow,
   castlescene, castlescenecore, castlescenemanager,
   castle3d, castlevectors,  X3DNodes, CastleImages,
+  {castlerenderer,}
   Tile_var, generic_var, MazerMapParser;
 
 const allow_error=0.10; {target fail allow}
@@ -467,7 +468,7 @@ var i,j,ix,iy,iz:integer;
     startRaycastTime:TDateTime;
 
     Tiles_count:array[0..maxMapTiles]of integer;
-    max_tiles_count,max_tile_pos:integer;
+    min_tiles_count,min_tile_pos:integer;
     debug_group_size:integer;
 begin
  StartRaycastTime:=now;
@@ -607,21 +608,24 @@ begin
   {now let's start the main algorithm}
   N_groups:=0;
   repeat
-    //let's find next 'max' node position and start grouping from it
-    Max_Tiles_Count:=0;
-    for i:=0 to n_tiles do if max_Tiles_Count<tiles_count[i] then begin
-      max_Tiles_Count:=Tiles_count[i];
-      max_Tile_pos:=i;
+    {here we find the tile with minimal amount (>0) of currently visible neighbours,
+    it produces smoother amount of members in a group
+    versus less groups in case maximum is used
+    Roughly, amount of groups will be ~sqrt(tiles) However, it's not as simple as it might seem}
+    Min_Tiles_Count:=MaxInt;
+    for i:=0 to n_tiles do if (min_Tiles_Count>tiles_count[i]) and (tiles_count[i]>0) then begin
+      min_Tiles_Count:=Tiles_count[i];
+      min_Tile_pos:=i;
     end;
     //if there are still nodes remaining we create a new group to hold them
-    if Max_Tiles_count>0 then begin
+    if min_Tiles_count<maxint then begin
       inc(n_groups);
       debug_group_size:=0;
       //scan max_tile_pos tile and mark all its neighbours as a group
-      for dx:=0 to Tiles[GeneratorSteps^[max_Tile_pos].Tile_Type].tilesizex-1 do
-       for dy:=0 to Tiles[GeneratorSteps^[max_Tile_pos].Tile_Type].tilesizey-1 do
-        for dz:=0 to Tiles[GeneratorSteps^[max_Tile_pos].Tile_Type].tilesizez-1 do
-         for i:=0 to n_tiles do if (Neighbours^[GeneratorSteps^[max_Tile_pos].tx+dx,GeneratorSteps^[max_Tile_pos].ty+dy,GeneratorSteps^[max_Tile_pos].tz+dz][i]>0) and (Tiles_count[i]>0) then begin
+      for dx:=0 to Tiles[GeneratorSteps^[min_Tile_pos].Tile_Type].tilesizex-1 do
+       for dy:=0 to Tiles[GeneratorSteps^[min_Tile_pos].Tile_Type].tilesizey-1 do
+        for dz:=0 to Tiles[GeneratorSteps^[min_Tile_pos].Tile_Type].tilesizez-1 do
+         for i:=0 to n_tiles do if (Neighbours^[GeneratorSteps^[min_Tile_pos].tx+dx,GeneratorSteps^[min_Tile_pos].ty+dy,GeneratorSteps^[min_Tile_pos].tz+dz][i]>0) and (Tiles_count[i]>0) then begin
            Tiles_count[i]:=-1;     //don't add this tile to another group
            groups[i]:=n_groups; //add this tile to this group
            inc(debug_group_size);
@@ -629,7 +633,7 @@ begin
       writeln(n_groups,' group size=',debug_group_size);
     end;
   //  writeln('Max_Tiles_Count=',Max_Tiles_Count);
-  until Max_Tiles_count=0;
+  until Min_Tiles_Count=maxint;
   writeln('TGroupNodes list is ready... n_groups=',n_groups);
 end;
 
@@ -798,7 +802,7 @@ for i:=1 to N_groups do MapGroups[i]:=TStaticGroupNode.Create('','');
 NavLight:= TPointLightNode.Create('', '');
 NavLight.FdColor.Value := vector3single(1,0.5,0.1);
 NavLight.FdAttenuation.value := Vector3Single(0,0,6);
-NavLight.FdRadius.value:=5;
+NavLight.FdRadius.value:=1;
 NavLight.FdIntensity.value:=30;
 NavLight.FdOn.value:=true;
 NavLight.FdShadows.value:=false;
@@ -820,6 +824,7 @@ MainRoot.FdChildren.add(nav);
 SetLength(MapScenes,N_Groups+1);
 for i:=0 to N_groups do begin
   MapScenes[i]:=TCastleScene.Create(Window.Scenemanager);
+  {MapScenes[i].Attributes.Shaders := srAlways;}
   MapScenes[i].ShadowMaps:=Shadow_maps_enabled;  {?????}
   MapScenes[i].Spatial := [ssRendering, ssDynamicCollisions];
   MapScenes[i].ProcessEvents := true;
@@ -868,7 +873,7 @@ begin
 
     writeln('Map created in ',round((now-LastTimeStamp)*24*60*60*1000),'ms');
     if not ((Target_Map_Area-MapArea)/Target_Map_Area<allow_error) then writeln('Target failed by more than ',round(allow_error*100),'%. Re-generating map... (',MapArea,'/',Target_Map_Area,')');
-    if not (deepest_Level=maxz) then writeln('Not all levels of the dungeons used. Re-generating map...');
+    if not (deepest_Level=maxz) then writeln('Not all levels of the dungeons used '+inttostr(deepest_level)+'/'+inttostr(maxz)+'. Re-generating map...');
   until (((Target_Map_Area-MapArea)/Target_Map_Area<allow_error) and (deepest_Level=maxz)) or (random<0.01);
 
   dispose(TileAtlas); //this one is no longer needed as soon as we've generated the basic map.

@@ -163,6 +163,13 @@ begin
   end;
 end;
 {-----------------------------------------------------------------------------------}
+
+{Well.. AddChildRecoursive and ScanRootRecoursive are two procedures
+That fix bugs (ill-fetatures) of blender X3D exporter
+AddChildRecoursive removes 2 garbage nodes from each object in the file
+and ScanRootRecoursive attaches texture properties (anisotropic smoothin)
+to the texture of the object.
+Normal map still doesn't work. I should fix it one day...}
 Procedure AddChildRecoursive(target,source:TAbstractX3DGroupingNode);
 var i:integer;
     tmpTransform:TTransformNode;
@@ -208,6 +215,57 @@ begin
   end;
 end;
 
+procedure ScanRootRecoursive(ParentNode:TAbstractX3DGroupingNode);
+var Texture_diffuse,texture_normal:TImageTextureNode;
+    st:string;
+    ShapeNode:TShapeNode;
+    k:integer;
+begin
+  for k:=0 to ParentNode.FdChildren.Count-1 do if (copy(ParentNode.FdChildren[k].NodeName,1,1)<>'(')then  begin
+     if ParentNode.FdChildren[k] is TAbstractX3DGroupingNode then ScanRootRecoursive(ParentNode.FdChildren[k] as TAbstractX3DGroupingNode)
+     else if (ParentNode.FdChildren[k] is TShapeNode) then begin
+       ShapeNode:=ParentNode.FdChildren[k] as TShapeNode;
+       //level4.Appearance.FdShaders;
+       {memo1.lines.add('Shape '+ level4.NiceName);}
+       try
+         texture_diffuse:=ShapeNode.fdappearance.Value.FindNode(TImageTextureNode,false) as TImageTextureNode;
+         texture_diffuse.FdTextureProperties.Value:=TextureProperties;
+         //writeln('*ImageTexture '+ texture_diffuse.NiceName);
+         {$ifdef useDDS}
+         st:=stringreplace(Texture_Diffuse.FdUrl.Items[0],'.tga','.dds',[rfIgnoreCase]);
+         texture_diffuse.FdUrl.Items.Clear;
+         texture_diffuse.fdURL.Items.add(st);
+         {$endif}
+
+         //TODO: load normal map?
+         //BUG: It doesn't work as expected?
+         {ok, now I get it. I need to create TImageTexture properly and make it load the texture
+         But the newly created texture does not seem to be initialized
+         And if I create it as a deepcopy of diffuse texture, then no new texture is loaded and the diffuse texture is multiplied by itself
+         So, practically this code either does nothing, either slows down and does nothing, or makes an ugly result :)
+
+         HOWEVER, the same works pefectly with diffuse texture if I try to change TGA extension to DDS - DDS file loads fine}
+         if Normal_map_enabled then begin
+           st:=stringreplace(Texture_Diffuse.FdUrl.Items[0],'diffuse','normal',[rfIgnoreCase]);
+           begin
+             texture_normal:= TImageTextureNode.Create('',st); {does nothing}
+//             texture_normal:=texture_diffuse.DeepCopy as TImageTextureNode;  {this simply leaves diffuse texture in the memory and multiplies it by self... with ugly result}
+             texture_normal.FdUrl.Items.Clear;
+             texture_normal.fdURL.Items.add(st);
+             texture_normal.FdTextureProperties.Value:=TextureProperties;
+//             texture_normal.IsTextureLoaded:=true; {this one slows down everything but does nothing}
+             texture_normal.IsTextureLoaded:=false; {this one also does nothing}
+           //writeln(texture_normal.FdUrl.Items[0]);
+             ShapeNode.Appearance.FdNormalMap.Value := texture_normal;
+           end;
+         end;
+       except
+       end;
+
+   end;
+
+end;
+end;
 
 Function LoadTile(fileName:string):Map_Tile_type;
 var val1,j:integer;
@@ -216,54 +274,12 @@ var val1,j:integer;
     TmpTile:Map_Tile_type;
     TmpRootNode:TX3DRootNode;
     thisface,thisvalue,err:integer;
-
-    i1,i2,i3,i4:integer;
-    level1,level2:TTransformNode;
-    level3:TGroupNode;
-    level4:TShapeNode;
-    Texture_diffuse,texture_normal:TImageTextureNode;
-    flg:boolean;
 begin
+ //writeln('Reading: '+filename);
  TmpRootNode:=Load3D(tiles_models_folder+fileName);
 
- //create texture properties for anisotropic smoothing
- //TODO:No need to make that 1000 of times!!! Only once!
-
  //scan temporary X3DRootNode for TImageTexture derivatives
- for i1:=0 to TmpRootNode.FdChildren.count-1 do
-   if TmpRootNode.FdChildren[i1] is TTransformNode then begin
-     level1:=TmpRootNode.FdChildren[i1] as TTransformNode;
-     {memo1.lines.add('TransformNode '+level1.NiceName);}
-     for i2:=0 to level1.FdChildren.count-1 do
-       if TmpRootNode.FdChildren[i2] is TTransformNode then begin
-         level2:=level1.FdChildren[i2] as TTransformNode;
-         {memo1.lines.add('TransformNode2 '+level2.NiceName);}
-         for i3:=0 to level2.FdChildren.count-1 do
-         if level2.FdChildren[i3] is TGroupNode then begin
-           level3:=level2.FdChildren[i3] as TGroupNode;
-           {memo1.lines.add('Groupnode '+level3.NiceName);}
-           for i4:=0 to level3.fdChildren.count-1 do
-           if level3.fdChildren[i4] is TShapeNode then begin
-             level4:=level3.fdChildren[i4] as TShapeNode;
-             //level4.Appearance.FdShaders;
-             {memo1.lines.add('Shape '+ level4.NiceName);}
-             texture_diffuse:=level4.fdappearance.Value.FindNode(TImageTextureNode,false) as TImageTextureNode;
-             texture_diffuse.FdTextureProperties.Value:=TextureProperties;
-             {memo1.lines.add('ImageTexture '+ texture_diffuse.NiceName);}
-
-             //TODO: load normal map?
-             //BUG: It doesn't work as expected?
-             if Normal_map_enabled then begin
-               texture_normal:=texture_diffuse.DeepCopy as TImageTextureNode;
-               texture_normal.FdUrl.Items.Clear;
-               texture_normal.fdURL.Items.add(stringreplace(Texture_Diffuse.FdUrl.Items[0],'diffuse','normal',[rfIgnoreCase]));
-               //writeln(texture_normal.FdUrl.Items[0]);
-               level4.Appearance.FdNormalMap.Value := texture_normal;
-             end;
-           end;
-         end;
-       end;
-   end;
+ ScanRootRecoursive(TmpRootNode);
 
  TmpTile.Tile3D:=TX3DRootNode.Create('','');
  AddChildRecoursive(TmpTile.Tile3D,TmpRootNode);
@@ -322,6 +338,7 @@ var i,j:integer;
 
     TmpRootNode:TX3DRootNode; //todo: make load placeholders as a separate procedure!!!
 begin
+   //create texture properties for anisotropic smoothing
    if anisotropic_smoothing>0 then begin
      textureProperties:=TTexturePropertiesNode.Create('','');
      TextureProperties.AnisotropicDegree:=anisotropic_smoothing;
@@ -380,6 +397,7 @@ begin
        for j:=1 to maxz do PlaceholderAtlas^[i].PlaceholderRND[j]:=1.0;
        //if placeholderRND>0 then ...   // however that's not so trivial here as it was in tiles
        TmpRootNode:=Load3D(placeholders_models_folder+Rec.Name);
+       ScanRootRecoursive(TmpRootNode);
        Placeholders[i]:=TX3DRootNode.Create('','');
        AddChildRecoursive(Placeholders[i],TmpRootNode);
 

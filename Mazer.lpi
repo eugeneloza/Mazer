@@ -55,10 +55,6 @@
           <Other>
             <CustomOptions Value="-dTryCastleScenes
 -dUseSwitches"/>
-            <OtherDefines Count="2">
-              <Define0 Value="TryCastleScenes"/>
-              <Define1 Value="UseSwitches"/>
-            </OtherDefines>
           </Other>
         </CompilerOptions>
       </Item2>
@@ -142,7 +138,7 @@
     </SearchPaths>
   </CompilerOptions>
   <Debugging>
-    <Exceptions Count="4">
+    <Exceptions Count="5">
       <Item1>
         <Name Value="EAbort"/>
       </Item1>
@@ -155,6 +151,9 @@
       <Item4>
         <Name Value="BreakTryFindNode"/>
       </Item4>
+      <Item5>
+        <Name Value="EX3DNotFound"/>
+      </Item5>
     </Exceptions>
   </Debugging>
 </CONFIG>
