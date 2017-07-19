@@ -23,7 +23,7 @@ uses
   castle3d, castlevectors,  X3DNodes, x3dload,
   castleplayer, castlecameras, CastleImages,
   CastleControls,
-  CastleOpenAL, CastleSoundEngine, CastleTimeUtils,
+  CastleSoundEngine, CastleTimeUtils,
   Tile_var, generic_var, Generator, MazerMapParser;
   ///, CastleFreeType, CastleFonts, CastleUnicode, CastleStringUtils,
 
